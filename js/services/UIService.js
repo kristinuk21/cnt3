@@ -70,6 +70,7 @@ class UIService {
     _initializeElements() {
         return {
             // Details tab elements
+            currentDate: document.getElementById('currentDate'),
             previousStartDay: document.getElementById('previousStartDay'),
             nextEndDay: document.getElementById('nextEndDay'),
             remainingDays: document.getElementById('remainingDays'),
@@ -90,6 +91,7 @@ class UIService {
      * @param {Object} data - Data object containing all calculated values
      */
     updateDetailsSection(data) {
+        this._updateElement(this.elements.currentDate, data.currentDate);
         this._updateElement(this.elements.previousStartDay, data.previousStartDay);
         this._updateElement(this.elements.nextEndDay, data.nextEndDay);
         this._updateElement(this.elements.remainingDays, data.remainingDays);

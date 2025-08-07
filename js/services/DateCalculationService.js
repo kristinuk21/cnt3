@@ -14,18 +14,16 @@ class DateCalculationService {
      * @returns {string} - Date string in MM/DD/YYYY format
      */
     findFirstWorkingDayOnOrAfter(date) {
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        let day = date.getDate();
-
-        while (true) {
-            const temp = new Date(year, month, day);
-            const weekday = temp.getDay();
-            if (weekday >= CONFIG.WORKING_DAYS.START && weekday <= CONFIG.WORKING_DAYS.END) { // Monday to Friday
-                return temp.toLocaleDateString();
-            }
-            day++;
+        let temp = new Date(date.getTime());
+        
+        while (temp.getDay() < CONFIG.WORKING_DAYS.START || temp.getDay() > CONFIG.WORKING_DAYS.END) {
+            temp.setDate(temp.getDate() + 1);
         }
+        
+        const month = temp.getMonth() + 1;
+        const day = temp.getDate();
+        const year = temp.getFullYear();
+        return `${month}/${day}/${year}`;
     }
 
     /**
@@ -34,26 +32,30 @@ class DateCalculationService {
      */
     computePreviousStartDay() {
         const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
+        const currentDay = now.getDate();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
-        let prevDay, prevMonth = month, prevYear = year;
+        // For August 7 (between 10th and 25th):
+        // We should return July 25, 2025 (the last period start)
+        let targetDate;
 
-        if (now.getDate() >= CONFIG.PERIODS.SECOND_DAY) {
-            prevDay = CONFIG.PERIODS.SECOND_DAY;
-        } else if (now.getDate() >= CONFIG.PERIODS.FIRST_DAY) {
-            prevDay = CONFIG.PERIODS.FIRST_DAY;
+        if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
+            // On or after 25th, use 25th of current month
+            targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.SECOND_DAY);
+        } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
+            // Between 10th and 24th, use 25th of previous month
+            const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            targetDate = new Date(prevYear, prevMonth, CONFIG.PERIODS.SECOND_DAY);
         } else {
-            if (month === 0) {
-                prevMonth = 11;
-                prevYear = year - 1;
-            } else {
-                prevMonth = month - 1;
-            }
-            prevDay = CONFIG.PERIODS.SECOND_DAY;
+            // Before 10th, use 25th of previous month
+            const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            targetDate = new Date(prevYear, prevMonth, CONFIG.PERIODS.SECOND_DAY);
         }
 
-        return this.findFirstWorkingDayOnOrAfter(new Date(prevYear, prevMonth, prevDay));
+        return this.findFirstWorkingDayOnOrAfter(targetDate);
     }
 
     /**
@@ -62,26 +64,28 @@ class DateCalculationService {
      */
     computeNextEndDay() {
         const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
+        const currentDay = now.getDate();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
-        let nextDay, nextMonth = month, nextYear = year;
+        // For August 7 (between 10th and 25th):
+        // We should return August 11 (next working day after August 10)
+        let targetDate;
 
-        if (now.getDate() < CONFIG.PERIODS.FIRST_DAY) {
-            nextDay = CONFIG.PERIODS.FIRST_DAY;
-        } else if (now.getDate() < CONFIG.PERIODS.SECOND_DAY) {
-            nextDay = CONFIG.PERIODS.SECOND_DAY;
+        if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
+            // On or after 25th, use 10th of next month
+            const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+            const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+            targetDate = new Date(nextYear, nextMonth, CONFIG.PERIODS.FIRST_DAY);
+        } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
+            // Between 10th and 24th, use 25th of current month
+            targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.SECOND_DAY);
         } else {
-            if (month === 11) {
-                nextMonth = 0;
-                nextYear = year + 1;
-            } else {
-                nextMonth = month + 1;
-            }
-            nextDay = CONFIG.PERIODS.FIRST_DAY;
+            // Before 10th, use 10th of current month
+            targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.FIRST_DAY);
         }
 
-        return this.findFirstWorkingDayOnOrAfter(new Date(nextYear, nextMonth, nextDay));
+        return this.findFirstWorkingDayOnOrAfter(targetDate);
     }
 
     /**

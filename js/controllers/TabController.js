@@ -82,9 +82,23 @@ class TabController {
             minutes: remainingMinutes % 60
         };
 
+        const formatDate = (date) => {
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            }).replace(/ /g, ' '); // Ensure consistent spacing
+        };
+
+        const parseDate = (dateStr) => {
+            const [month, day, year] = dateStr.split('/').map(Number);
+            return new Date(year, month - 1, day);
+        };
+
         const data = {
-            previousStartDay: this.dateCalculationService.computePreviousStartDay(),
-            nextEndDay: this.dateCalculationService.computeNextEndDay(),
+            currentDate: formatDate(new Date()),
+            previousStartDay: formatDate(parseDate(this.dateCalculationService.computePreviousStartDay())),
+            nextEndDay: formatDate(parseDate(this.dateCalculationService.computeNextEndDay())),
             remainingDays: this.dateCalculationService.computeRemainingDaysUntilNextEnd(),
             isWorkingDay: this.dateCalculationService.isTodayWorkingDay(),
             isWorkingHours: this.dateCalculationService.isCurrentTimeInWorkingHours(),
