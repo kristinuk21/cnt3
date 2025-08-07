@@ -1,0 +1,109 @@
+/* Custom styles for Progress Tracker - Optimized and Organized */
+
+/* ===== LAYOUT ===== */
+.gap-3 {
+    gap: 1rem !important;
+}
+
+/* ===== MODAL STYLING ===== */
+.custom-modal-content {
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    padding: 0.5rem 0.5rem 1.5rem 0.5rem;
+    min-width: 350px;
+}
+
+.modal-header {
+    border-bottom: 1px solid #444 !important;
+    padding-bottom: 0.5rem;
+}
+
+.modal-body {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+/* ===== BUTTON STYLING ===== */
+#startEarlyBtn,
+#startBreakBtn, 
+#endBreakBtn {
+    font-weight: 500;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+}
+
+#startBreakBtn, 
+#endBreakBtn {
+    min-width: 120px;
+}
+
+/* ===== PROGRESS BAR STYLING ===== */
+#hoursProgress {
+    cursor: pointer;
+}
+
+/* ===== BREAK ITEM STYLING ===== */
+.break-item {
+    background-color: #6c757d !important;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.break-item:last-child {
+    margin-bottom: 0;
+}
+
+/* ===== NOTIFICATION STYLING ===== */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    pointer-events: none;
+    max-width: 300px;
+}
+
+.toast {
+    margin-bottom: 8px;
+    pointer-events: auto;
+    cursor: pointer;
+    word-wrap: break-word;
+    transition: all 0.3s ease;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 500px) {
+    .custom-modal-content {
+        min-width: unset;
+        padding: 0.5rem;
+    }
+    
+    #startBreakBtn, 
+    #endBreakBtn {
+        min-width: 90px;
+    }
+    
+    .toast-container {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+    }
+}
+
+/* ===== UTILITY CLASSES ===== */
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+.cursor-pointer {
+    cursor: pointer !important;
+}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Tracker</title>
+    <link rel="stylesheet" href="assets/bootstrap.min.css">
+    <link rel="stylesheet" href="css/custom.css">
+</head>
+<body class="bg-dark">
+    <div class="container mt-5 px-2 px-md-5">
+        <h1 class="text-center mb-4 text-light">Progress Tracker</h1>
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-8">
+                <div class="card bg-dark text-light shadow rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <ul class="nav nav-pills nav-fill mb-4 gap-2" id="myTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active rounded-pill" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Home</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link rounded-pill" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab" aria-controls="details" aria-selected="false">Details</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link rounded-pill" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button" role="tab" aria-controls="logs" aria-selected="false">Logs</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content" id="myTabContent">
+                            <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
+                                <div class="mb-4">
+                                    <div id="homeProgressBarContainer"></div>
+                                </div>
+                                <div class="mb-4">
+                                    <div id="todayProgressBarContainer"></div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="details" role="tabpanel" aria-labelledby="details-tab">
+                                <h3 class="mb-3">Details</h3>
+                                <section class="mb-4">
+                                    <div class="mb-2">Previous start day: <span id="previousStartDay">7/25/2025</span></div>
+                                    <div class="mb-2">Next end day: <span id="nextEndDay">8/11/2025</span></div>
+                                    <div>Remaining days till next end date: <span id="remainingDays">0</span></div>
+                                </section>
+                                <section>
+                                    <h4 class="mb-2">Today</h4>
+                                    <div class="mb-2">Working day Flag: <span id="todayWorkingDayFlag">Not started</span></div>
+                                    <div class="mb-2">Working hours flag: <span id="todayWorkingHoursFlag">Not started</span></div>
+                                    <div>Remaining hours today: <span id="remainingHours">0</span></div>
+                                    <div id="startEarlyContainer" class="mt-2"></div>
+                                </section>
+                            </div>
+                            <div class="tab-pane fade" id="logs" role="tabpanel" aria-labelledby="logs-tab">
+                                <h3 class="mb-3">Logs</h3>
+                                <div id="logsContent" class="mb-3"></div>
+                                <button id="resetLogsBtn" class="btn btn-danger">Reset Logs</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Today Modal -->
+        <div class="modal fade" id="breakModal" tabindex="-1" aria-labelledby="breakModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content bg-dark text-light custom-modal-content">
+                    <div class="modal-header border-secondary">
+                        <h5 class="modal-title" id="breakModalLabel">Today details</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="todayModalContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- JavaScript Dependencies -->
+    <script src="assets/bootstrap.bundle.min.js"></script>
+    <script src="assets/sql-wasm.js"></script>
+    
+    <!-- Constants and Configuration -->
+    <script src="js/config.js"></script>
+    
+    <!-- Services -->
+    <script src="js/services/UtilsService.js"></script>
+    <script src="js/services/DatabaseService.js"></script>
+    <script src="js/services/DateCalculationService.js"></script>
+    <script src="js/services/ProgressCalculationService.js"></script>
+    <script src="js/services/NotificationService.js"></script>
+    <script src="js/services/UIService.js"></script>
+    <script src="js/services/EventService.js"></script>
+    
+    <!-- Controllers -->
+    <script src="js/controllers/TabController.js"></script>
+    <script src="js/controllers/ProgressController.js"></script>
+    <script src="js/controllers/ButtonController.js"></script>
+    <script src="js/controllers/ModalController.js"></script>
+    <script src="js/controllers/ApplicationController.js"></script>
+    
+    <!-- React Dependencies -->
+    <script src="assets/react.development.js"></script>
+    <script src="assets/react-dom.development.js"></script>
+    <script src="assets/babel.min.js"></script>
+    
+    <!-- React Components -->
+    <script type="text/babel" src="js/components/HomeProgressBar.jsx"></script>
+    <script type="text/babel" src="js/components/TodayProgressBar.jsx"></script>
+    
+    <!-- Progress Bar Helpers and Main Application -->
+    <script src="js/progressBarHelpers.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

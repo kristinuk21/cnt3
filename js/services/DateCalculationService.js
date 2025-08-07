@@ -1,0 +1,267 @@
+/**
+ * DateCalculationService - Handles all date-related calculations
+ * Follows Single Responsibility Principle - only responsible for date calculations
+ */
+class DateCalculationService {
+    constructor() {
+        this.workingHoursStart = CONFIG.WORKING_HOURS.START;
+        this.workingHoursEnd = CONFIG.WORKING_HOURS.END;
+    }
+
+    /**
+     * Find first working day on or after given date
+     * @param {Date} date - The date to start searching from
+     * @returns {string} - Date string in MM/DD/YYYY format
+     */
+    findFirstWorkingDayOnOrAfter(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        let day = date.getDate();
+
+        while (true) {
+            const temp = new Date(year, month, day);
+            const weekday = temp.getDay();
+            if (weekday >= CONFIG.WORKING_DAYS.START && weekday <= CONFIG.WORKING_DAYS.END) { // Monday to Friday
+                return temp.toLocaleDateString();
+            }
+            day++;
+        }
+    }
+
+    /**
+     * Compute the previous start day based on current date
+     * @returns {string} - Date string in MM/DD/YYYY format
+     */
+    computePreviousStartDay() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+
+        let prevDay, prevMonth = month, prevYear = year;
+
+        if (now.getDate() >= CONFIG.PERIODS.SECOND_DAY) {
+            prevDay = CONFIG.PERIODS.SECOND_DAY;
+        } else if (now.getDate() >= CONFIG.PERIODS.FIRST_DAY) {
+            prevDay = CONFIG.PERIODS.FIRST_DAY;
+        } else {
+            if (month === 0) {
+                prevMonth = 11;
+                prevYear = year - 1;
+            } else {
+                prevMonth = month - 1;
+            }
+            prevDay = CONFIG.PERIODS.SECOND_DAY;
+        }
+
+        return this.findFirstWorkingDayOnOrAfter(new Date(prevYear, prevMonth, prevDay));
+    }
+
+    /**
+     * Compute the next end day based on current date
+     * @returns {string} - Date string in MM/DD/YYYY format
+     */
+    computeNextEndDay() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+
+        let nextDay, nextMonth = month, nextYear = year;
+
+        if (now.getDate() < CONFIG.PERIODS.FIRST_DAY) {
+            nextDay = CONFIG.PERIODS.FIRST_DAY;
+        } else if (now.getDate() < CONFIG.PERIODS.SECOND_DAY) {
+            nextDay = CONFIG.PERIODS.SECOND_DAY;
+        } else {
+            if (month === 11) {
+                nextMonth = 0;
+                nextYear = year + 1;
+            } else {
+                nextMonth = month + 1;
+            }
+            nextDay = CONFIG.PERIODS.FIRST_DAY;
+        }
+
+        return this.findFirstWorkingDayOnOrAfter(new Date(nextYear, nextMonth, nextDay));
+    }
+
+    /**
+     * Check if today is a working day (Monday to Friday)
+     * @returns {boolean}
+     */
+    isTodayWorkingDay() {
+        const today = new Date();
+        const day = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+        return UtilsService.isWorkingDay(day);
+    }
+
+    /**
+     * Check if current time is within working hours (10:00 to 18:00)
+     * @returns {boolean}
+     */
+    isCurrentTimeInWorkingHours() {
+        const now = new Date();
+        const hour = now.getHours();
+        return UtilsService.isWithinWorkingHours(hour);
+    }
+
+    /**
+     * Compute remaining days until next end date
+     * @returns {number}
+     */
+    computeRemainingDaysUntilNextEnd() {
+        const now = new Date();
+        const nextEndDateStr = this.computeNextEndDay();
+        const [month, day, year] = nextEndDateStr.split('/').map(Number);
+        const nextEndDate = new Date(year, month - 1, day);
+        
+        // Set both dates to start of day to avoid time-based issues
+        const nowStartOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const nextEndStartOfDay = new Date(nextEndDate.getFullYear(), nextEndDate.getMonth(), nextEndDate.getDate());
+        
+        const diffTime = nextEndStartOfDay - nowStartOfDay;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays >= 0 ? diffDays : 0;
+    }
+
+    /**
+     * Compute remaining hours and minutes until end of work day (18:00)
+     * @returns {Object} - {hours: number, minutes: number}
+     */
+    computeRemainingHoursToday() {
+        const now = new Date();
+        const endOfWork = new Date(now.getFullYear(), now.getMonth(), now.getDate(), this.workingHoursEnd, 0, 0, 0);
+        let remainingMs = endOfWork - now;
+        
+        if (remainingMs < 0) remainingMs = 0;
+        
+        const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        return { hours: remainingHours, minutes: remainingMinutes };
+    }
+
+    /**
+     * Format date for display (e.g., "11 Aug")
+     * @param {string} dateString - Date string in MM/DD/YYYY format
+     * @returns {string} - Formatted date string
+     */
+    formatDateForDisplay(dateString) {
+        return UtilsService.formatDate(dateString, 'short');
+    }
+
+    /**
+     * Calculate progress percentage for days
+     * @returns {number} - Progress percentage (0-100)
+     */
+    calculateDaysProgress() {
+        const prevStartStr = this.computePreviousStartDay();
+        const nextEndStr = this.computeNextEndDay();
+        const remainingDays = this.computeRemainingDaysUntilNextEnd();
+        
+        const [prevMonth, prevDay, prevYear] = prevStartStr.split('/').map(Number);
+        const [nextMonth, nextDay, nextYear] = nextEndStr.split('/').map(Number);
+        
+        const prevStartDate = new Date(prevYear, prevMonth - 1, prevDay);
+        const nextEndDate = new Date(nextYear, nextMonth - 1, nextDay);
+        
+        const totalDays = Math.max(1, Math.ceil((nextEndDate - prevStartDate) / (1000 * 60 * 60 * 24)));
+        const daysPassed = Math.max(0, totalDays - remainingDays);
+        
+        const progress = UtilsService.calculatePercentage(daysPassed, totalDays);
+        
+        // Debug logging
+        console.log('Days Progress Debug:', {
+            prevStart: prevStartStr,
+            nextEnd: nextEndStr,
+            remainingDays,
+            totalDays,
+            daysPassed,
+            progress: progress + '%'
+        });
+        
+        return progress;
+    }
+
+    /**
+     * Calculate progress percentage for today's hours
+     * @returns {number} - Progress percentage (0-100)
+     */
+    /**
+     * Calculate progress percentage for today's hours, considering early start and break times.
+     * @param {Object} options - { earlyStart: Date|null, breaks: Array<{start: Date, end: Date}> }
+     * @returns {number} - Progress percentage (0-100)
+     */
+    calculateHoursProgress(options = {}) {
+        const now = new Date();
+        
+        // Work day is 8 hours (10:00-18:00 by default)
+        let workStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), this.workingHoursStart, 0, 0, 0);
+        
+        // If started early, use that time
+        if (options.earlyStart instanceof Date && options.earlyStart < workStart) {
+            workStart = new Date(options.earlyStart);
+        }
+        
+        // 8-hour work period
+        const workEnd = new Date(workStart.getTime() + 8 * 60 * 60 * 1000);
+        const totalWorkMinutes = 8 * 60; // 480 minutes
+        
+        // Calculate break time
+        let breakMinutes = 0;
+        if (Array.isArray(options.breaks)) {
+            for (const brk of options.breaks) {
+                if (brk.start) {
+                    const breakStart = new Date(brk.start);
+                    const breakEnd = brk.end ? new Date(brk.end) : now;
+                    if (breakEnd > breakStart) {
+                        breakMinutes += Math.floor((breakEnd - breakStart) / (1000 * 60));
+                    }
+                }
+            }
+        }
+        
+        // Minutes worked so far (excluding breaks)
+        const elapsedMinutes = Math.floor((now - workStart) / (1000 * 60));
+        const workMinutes = Math.max(0, elapsedMinutes - breakMinutes);
+        
+        return UtilsService.calculatePercentage(workMinutes, totalWorkMinutes);
+    }
+
+    /**
+     * Calculate remaining time for today's work
+     * @param {Object} options - { earlyStart: Date|null, breaks: Array }
+     * @returns {Object} {hours: number, minutes: number, endTime: string}
+     */
+    calculateRemainingTime(options = {}) {
+        const now = new Date();
+        
+        // Work day starts at 10:00 AM or early start time
+        let workStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), this.workingHoursStart, 0, 0, 0);
+        if (options.earlyStart instanceof Date && options.earlyStart < workStart) {
+            workStart = new Date(options.earlyStart);
+        }
+        
+        // 8-hour work period + break time
+        let workEnd = new Date(workStart.getTime() + 8 * 60 * 60 * 1000);
+        
+        // Add break time to extend the end time
+        if (Array.isArray(options.breaks)) {
+            for (const brk of options.breaks) {
+                if (brk.start) {
+                    const breakStart = new Date(brk.start);
+                    const breakEnd = brk.end ? new Date(brk.end) : now;
+                    if (breakEnd > breakStart) {
+                        workEnd = new Date(workEnd.getTime() + (breakEnd - breakStart));
+                    }
+                }
+            }
+        }
+        
+        const remainingMs = Math.max(0, workEnd - now);
+        const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+        const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        const endTime = workEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        return { hours, minutes, endTime };
+    }
+}
