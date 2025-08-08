@@ -1,16 +1,18 @@
 // HomeProgressBar.jsx
 // A simple React component for the Home progress bar section
 
-/**
- * HomeProgressBar - Presentational component
- * Props:
- *   progress: number (0-100)
- *   endDate: string
- *   remainingDays: number
- *   onClick: function
- */
-function HomeProgressBar({ progress, endDate, remainingDays, onClick }) {
-  return (
+(function() {
+  /**
+   * HomeProgressBar - Presentational component
+   * Props:
+   *   onClick: function - Click handler for the progress bar
+   */
+  window.HomeProgressBar = function HomeProgressBar({ onClick }) {
+    // Get data from the global store
+    const data = window.getProgressData()?.home || { progress: 0, endDate: '', remainingDays: 0 };
+    const { progress, endDate, remainingDays } = data;
+    
+    return (
     <div className="mb-4">
       <div className="d-flex justify-content-between align-items-center mb-1">
         <label htmlFor="daysProgress" className="form-label mb-0">Overall</label>
@@ -33,4 +35,4 @@ function HomeProgressBar({ progress, endDate, remainingDays, onClick }) {
     </div>
   );
 }
-
+})();

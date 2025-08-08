@@ -1,7 +1,16 @@
 /**
  * ProgressCalculationService - Centralized progress calculations
  * Follows Single Responsibility and DRY principles
- * Consolidates all progress-related calculations in one place
+ * Consolidates all progress-related calculations            // Calculate times
+        const defaultStartTime = new Date();
+        defaultStartTime.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
+        const actualStartTime = (earlyStart instanceof Date && earlyStart < defaultStartTime) ? earlyStart : defaultStartTime;
+        
+        // For early start check
+        const standardWorkStart = new Date();
+        standardWorkStart.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
+        
+        const result = {e place
  */
 class ProgressCalculationService {
     constructor(dateCalculationService, databaseService) {
@@ -33,32 +42,6 @@ class ProgressCalculationService {
      */
     calculateRemainingTime() {
         const now = new Date();
-        const currentHour = now.getHours();
-        
-        // If it's past working hours or before working hours, show different message
-        if (currentHour >= CONFIG.WORKING_HOURS.END) {
-            return {
-                totalMs: 0,
-                hours: 0,
-                minutes: 0,
-                isAfterHours: true
-            };
-        }
-        
-        if (currentHour < CONFIG.WORKING_HOURS.START) {
-            // Calculate time until work starts
-            const workStart = new Date();
-            workStart.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
-            const timeUntilWork = workStart - now;
-            
-            return {
-                totalMs: timeUntilWork,
-                hours: Math.floor(timeUntilWork / (60 * 60 * 1000)),
-                minutes: Math.floor((timeUntilWork % (60 * 60 * 1000)) / (60 * 1000)),
-                isBeforeHours: true
-            };
-        }
-        
         const earlyStart = this.databaseService.getTodayEarlyStartTime();
         const breaks = this._getTodayBreaks();
         
@@ -70,8 +53,19 @@ class ProgressCalculationService {
         if (earlyStart instanceof Date && earlyStart < workStart) {
             workStart = new Date(earlyStart);
         }
+
+        // If we haven't started yet, show time until work starts
+        if (now < workStart) {
+            const timeUntilWork = workStart - now;
+            return {
+                totalMs: timeUntilWork,
+                hours: Math.floor(timeUntilWork / (60 * 60 * 1000)),
+                minutes: Math.floor((timeUntilWork % (60 * 60 * 1000)) / (60 * 1000)),
+                isBeforeHours: true
+            };
+        }
         
-        // Calculate 8-hour workday end time
+        // Calculate 8-hour workday end time from the actual start time
         const eightHoursMs = (window.CONSTANTS?.TIME?.EIGHT_HOURS) || (8 * 60 * 60 * 1000);
         let workEnd = new Date(workStart.getTime() + eightHoursMs);
         
@@ -79,25 +73,39 @@ class ProgressCalculationService {
         const breakMs = this._calculateBreakDuration(breaks);
         workEnd = new Date(workEnd.getTime() + breakMs);
         
+        // If we're past the calculated end time, show no time remaining
+        if (now >= workEnd) {
+            return {
+                totalMs: 0,
+                hours: 0,
+                minutes: 0,
+                isAfterHours: true
+            };
+        }
+        
         // Debug logging
         console.log('Progress Calc Debug:', {
             now: now.toLocaleTimeString(),
             workStart: workStart.toLocaleTimeString(),
             workEnd: workEnd.toLocaleTimeString(),
             breakMs,
+            breakMins: Math.floor(breakMs / (60 * 1000)),
             remainingMs: workEnd - now
         });
         
         // Calculate remaining time
-        const remainingMs = Math.max(0, workEnd - now);
+        const remainingMs = workEnd - now;
         
         const oneHourMs = (window.CONSTANTS?.TIME?.ONE_HOUR) || (60 * 60 * 1000);
         const oneMinuteMs = (window.CONSTANTS?.TIME?.ONE_MINUTE) || (60 * 1000);
         
+        const hours = Math.floor(remainingMs / oneHourMs);
+        const minutes = Math.floor((remainingMs % oneHourMs) / oneMinuteMs);
         return {
             totalMs: remainingMs,
-            hours: Math.floor(remainingMs / oneHourMs),
-            minutes: Math.floor((remainingMs % oneHourMs) / oneMinuteMs)
+            hours,
+            minutes,
+            formatted: hours === 0 && minutes === 0 ? '0h 0m' : `${hours}h ${minutes}m`
         };
     }
 
@@ -151,19 +159,66 @@ class ProgressCalculationService {
 
     /**
      * Get comprehensive progress data for today section
-     * @returns {Object} Today progress data
+     * This is the single source of truth for all today's calculations
+     * @returns {Object} Today progress data with all necessary information for both modal and details view
      */
     getTodayProgressData() {
+        const now = new Date();
+        const earlyStart = this.databaseService.getTodayEarlyStartTime();
+        const todayBreaks = this.databaseService.getBreaks(); // Already filtered for today
         const remainingTime = this.calculateRemainingTime();
+        const isWorkingDay = this.dateService.isTodayWorkingDay();
+        
+        // Calculate total break duration
+        const breakMs = this._calculateBreakDuration(todayBreaks);
+        const breakMinutes = Math.round(breakMs / (60 * 1000)); // Round instead of floor
+        const breakHours = Math.floor(breakMinutes / 60);
+        const breakRemainingMinutes = breakMinutes % 60;
+        
+        // Calculate work status
+        let workStatus = isWorkingDay ? 'Working day' : 'Non-working day';
+        if (remainingTime.isBeforeHours) {
+            workStatus = 'Waiting to start';
+        } else if (remainingTime.isAfterHours) {
+            workStatus = 'Day completed';
+        }
+        
+        // Calculate times
+        const defaultStartTime = new Date();
+        defaultStartTime.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
+        const actualStartTime = (earlyStart instanceof Date && earlyStart < defaultStartTime) ? earlyStart : defaultStartTime;
         
         const result = {
+            // Progress information
             progress: this.calculateHoursProgress(),
             remainingHours: remainingTime.hours,
             remainingMinutes: remainingTime.minutes,
-            endTime: this.calculateEndTime()
+            endTime: this.calculateEndTime(),
+            
+            // Status flags
+            isBeforeHours: remainingTime.isBeforeHours,
+            isAfterHours: remainingTime.isAfterHours,
+            isWorkingDay: isWorkingDay,
+            workStatus: workStatus,
+            
+            // Times
+            startTime: isWorkingDay ? 
+                UtilsService.formatDate(actualStartTime, 'time') : 
+                'Not a working day',
+            
+            // Break information
+            totalBreakDuration: todayBreaks.length > 0 ? 
+                (breakMinutes > 0 ? 
+                    (breakHours > 0 ? `${breakHours}h ${breakRemainingMinutes}m` : `${breakMinutes}m`) : 
+                    '0m') : 
+                'No breaks taken',
+            activeBreak: todayBreaks.find(b => !b.end),
+            breakCount: todayBreaks.length,
+            breaks: todayBreaks,
+            hasEarlyStart: earlyStart instanceof Date && earlyStart < defaultStartTime
         };
         
-        console.log('ProgressCalculationService.getTodayProgressData:', result);
+        console.log('Today Progress Data:', result);
         return result;
     }
 
@@ -173,10 +228,7 @@ class ProgressCalculationService {
      * @returns {Array} Array of today's breaks
      */
     _getTodayBreaks() {
-        const today = new Date().toDateString();
-        return this.databaseService.getBreaks().filter(b => 
-            b.start && new Date(b.start).toDateString() === today
-        );
+        return this.databaseService.getBreaks(); // DatabaseService now filters for today's breaks
     }
 
     /**

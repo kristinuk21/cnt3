@@ -15,17 +15,39 @@ class ApplicationController {
      */
     async initialize() {
         try {
-            await this._initializeServices();
-            this._initializeControllers();
-            this._setupEventHandlers();
-            this._performInitialUpdates();
+            // Initialize each component separately to identify where failure occurs
+            try {
+                await this._initializeServices();
+            } catch (servicesError) {
+                throw new Error(`Services initialization failed: ${servicesError.message}`);
+            }
+
+            try {
+                this._initializeControllers();
+            } catch (controllersError) {
+                throw new Error(`Controllers initialization failed: ${controllersError.message}`);
+            }
+
+            try {
+                this._setupEventHandlers();
+            } catch (eventsError) {
+                throw new Error(`Event handlers setup failed: ${eventsError.message}`);
+            }
+
+            try {
+                this._performInitialUpdates();
+            } catch (updatesError) {
+                throw new Error(`Initial updates failed: ${updatesError.message}`);
+            }
             
             this.services.database.addLog(CONFIG.MESSAGES.INFO.PAGE_RELOADED);
             this.isInitialized = true;
             
             UtilsService.log('Application initialized successfully');
         } catch (error) {
-            UtilsService.log(`Failed to initialize application: ${error.message}`, 'error');
+            const errorMessage = `Failed to initialize application: ${error.message}`;
+            UtilsService.log(errorMessage, 'error');
+            alert(errorMessage);
             throw error;
         }
     }
@@ -60,7 +82,8 @@ class ApplicationController {
     _initializeControllers() {
         this.controllers.modal = new ModalController(
             this.services.ui,
-            this.services.database
+            this.services.database,
+            this.services.progressCalculation
         );
 
         this.controllers.progress = new ProgressController(
@@ -71,13 +94,15 @@ class ApplicationController {
         this.controllers.tab = new TabController(
             this.services.ui,
             this.services.dateCalculation,
-            this.services.database
+            this.services.database,
+            this.services.progressCalculation
         );
 
         this.controllers.button = new ButtonController(
             this.services.database,
             this.services.ui,
-            this.controllers.tab
+            this.controllers.tab,
+            this.controllers.modal
         );
     }
 

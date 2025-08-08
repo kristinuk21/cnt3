@@ -1,19 +1,24 @@
 // TodayProgressBar.jsx
 // React component for the Today progress bar section
 
-
-/**
- * TodayProgressBar - Presentational component
- * Props:
- *   progress: number (0-100)
- *   remainingHours: number
- *   remainingMinutes: number
- *   endTime: string
- *   isAfterHours: boolean
- *   isBeforeHours: boolean
- *   onClick: function
- */
-function TodayProgressBar({ progress, remainingHours, remainingMinutes, endTime, isAfterHours, isBeforeHours, onClick }) {
+(function() {
+  /**
+   * TodayProgressBar - Presentational component
+   * Props:
+   *   onClick: function - Click handler for the progress bar
+   */
+  window.TodayProgressBar = function TodayProgressBar({ onClick }) {
+    // Get data from the global store
+    const data = window.getProgressData()?.today || { 
+      progress: 0, 
+      remainingHours: 0, 
+      remainingMinutes: 0, 
+      endTime: '', 
+      isAfterHours: false, 
+      isBeforeHours: false 
+    };
+    
+    const { progress, remainingHours, remainingMinutes, endTime, isAfterHours, isBeforeHours } = data;
   let displayText = `${remainingHours}h ${remainingMinutes}m left`;
   let barClass = "progress-bar bg-success text-dark progress-bar-striped progress-bar-animated rounded-pill d-flex align-items-center";
   
@@ -62,4 +67,5 @@ function TodayProgressBar({ progress, remainingHours, remainingMinutes, endTime,
     </div>
   );
 }
+})();
 

@@ -9,34 +9,53 @@ let app = null;
 // Initialize application when DOM is loaded
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        app = new ApplicationController();
+        // Check if required dependencies are available
+        if (!window.React) {
+            throw new Error('React is not loaded');
+        }
+        if (!window.ReactDOM) {
+            throw new Error('ReactDOM is not loaded');
+        }
+        if (!window.Babel) {
+            throw new Error('Babel is not loaded');
+        }
         
-        // Make app globally available immediately
+        app = new ApplicationController();
         window.app = app;
         
         await app.initialize();
         
         // Setup progress bar refresh system
-        window.onProgressBarRefresh = window.onProgressBarRefresh || [];
+        const progressData = {
+            today: null,
+            home: null
+        };
+
+        window.getProgressData = () => ({...progressData});
         
-        // Add React render as the main callback
-        if (window.renderProgressBars && (!window.onProgressBarRefresh.includes(window.renderProgressBars))) {
-            window.onProgressBarRefresh.push(window.renderProgressBars);
+        // Update progress data
+        function updateProgressData() {
+            try {
+                progressData.today = app.getService('progressCalculation').getTodayProgressData();
+                progressData.home = app.getService('progressCalculation').getHomeProgressData();
+                
+                if (window.renderProgressBars) {
+                    window.renderProgressBars();
+                }
+            } catch (e) {
+                UtilsService.log(`Progress data update error: ${e.message}`, 'error');
+            }
         }
+        
+        // Initial update
+        updateProgressData();
         
         // Setup refresh interval
-        function runAllRefreshCallbacks() {
-            window.onProgressBarRefresh.forEach(fn => {
-                try { fn(); } catch (e) { 
-                    console.warn('Refresh callback error:', e);
-                }
-            });
-        }
-        
-        setInterval(runAllRefreshCallbacks, 1000);
+        setInterval(updateProgressData, 1000);
     } catch (error) {
-        UtilsService.log(`Failed to start application: ${error.message}`, 'error');
-        alert('Failed to initialize the application. Please check the console for details.');
+        const errorDetails = `Failed to start application:\n\n${error.message}\n\nIf this persists, try clearing your browser cache and reloading.`;
+        UtilsService.log(errorDetails, 'error');
+        alert(errorDetails);
     }
 });
 

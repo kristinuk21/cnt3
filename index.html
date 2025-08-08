@@ -27,12 +27,7 @@
                         </ul>
                         <div class="tab-content" id="myTabContent">
                             <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
-                                <div class="mb-4">
-                                    <div id="homeProgressBarContainer"></div>
-                                </div>
-                                <div class="mb-4">
-                                    <div id="todayProgressBarContainer"></div>
-                                </div>
+                                <div id="progressContainer"></div>
                             </div>
                             <div class="tab-pane fade" id="details" role="tabpanel" aria-labelledby="details-tab">
                                 <h3 class="mb-3">Details</h3>
@@ -43,11 +38,33 @@
                                     <div>Remaining days till next end date: <span id="remainingDays">0</span></div>
                                 </section>
                                 <section>
-                                    <h4 class="mb-2">Today</h4>
-                                    <div class="mb-2">Working day Flag: <span id="todayWorkingDayFlag">Not started</span></div>
-                                    <div class="mb-2">Working hours flag: <span id="todayWorkingHoursFlag">Not started</span></div>
-                                    <div>Remaining hours today: <span id="remainingHours">0</span></div>
-                                    <div id="startEarlyContainer" class="mt-2"></div>
+                                    <h4 class="mb-2">Today's Status</h4>
+                                    <div class="card bg-dark text-light border-secondary mb-3">
+                                        <div class="card-body p-3">
+                                            <h5 class="card-title text-light mb-3">Work Schedule</h5>
+                                            <div class="mb-2"><strong>Status:</strong> <span id="todayWorkingDayFlag" class="text-light">Not started</span></div>
+                                            <div class="mb-2"><strong>Day started at:</strong> <span id="todayStartTime" class="text-light">Not started</span></div>
+                                            <div class="mb-2"><strong>Expected end time:</strong> <span id="expectedEndTime" class="text-light">--:--</span></div>
+                                            <div class="mb-2"><strong>Hours remaining:</strong> <span id="remainingHours" class="text-light">0</span></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="card bg-dark text-light border-secondary mb-3">
+                                        <div class="card-body p-3">
+                                            <h5 class="card-title text-light mb-3">Break Information</h5>
+                                            <div class="mb-2"><strong>Current break status:</strong> <span id="currentBreakStatus" class="text-light">No break active</span></div>
+                                            <div class="mb-2"><strong>Total break duration:</strong> <span id="totalBreakDuration" class="text-light">0m</span></div>
+                                            <div class="mb-2"><strong>Number of breaks today:</strong> <span id="breakCount" class="text-light">0</span></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card bg-dark text-light border-secondary">
+                                        <div class="card-body p-3">
+                                            <h5 class="card-title text-light mb-3">Progress</h5>
+                                            <div class="mb-2"><strong>Today's progress:</strong> <span id="todayProgress" class="text-light">0%</span></div>
+                                            <div class="mb-2"><strong>Working hours:</strong> <span id="todayWorkingHoursFlag" class="text-light">Not in working hours</span></div>
+                                        </div>
+                                    </div>
                                 </section>
                             </div>
                             <div class="tab-pane fade" id="logs" role="tabpanel" aria-labelledby="logs-tab">
@@ -75,9 +92,14 @@
             </div>
         </div>
     </div>
-    <!-- JavaScript Dependencies -->
+    <!-- Core Dependencies -->
     <script src="assets/bootstrap.bundle.min.js"></script>
-    <script src="assets/sql-wasm.js"></script>
+    <script src="assets/sql-wasm.js" defer></script>
+    
+    <!-- React Dependencies -->
+    <script src="assets/react.development.js"></script>
+    <script src="assets/react-dom.development.js"></script>
+    <script src="assets/babel.min.js"></script>
     
     <!-- Constants and Configuration -->
     <script src="js/config.js"></script>
@@ -91,21 +113,17 @@
     <script src="js/services/UIService.js"></script>
     <script src="js/services/EventService.js"></script>
     
+    <!-- React Components -->
+    <script type="text/babel" data-presets="react" src="js/components/HomeProgressBar.jsx"></script>
+    <script type="text/babel" data-presets="react" src="js/components/TodayProgressBar.jsx"></script>
+    <script type="text/babel" data-presets="react" src="js/components/ProgressBarRoot.jsx"></script>
+    
     <!-- Controllers -->
     <script src="js/controllers/TabController.js"></script>
     <script src="js/controllers/ProgressController.js"></script>
     <script src="js/controllers/ButtonController.js"></script>
     <script src="js/controllers/ModalController.js"></script>
     <script src="js/controllers/ApplicationController.js"></script>
-    
-    <!-- React Dependencies -->
-    <script src="assets/react.development.js"></script>
-    <script src="assets/react-dom.development.js"></script>
-    <script src="assets/babel.min.js"></script>
-    
-    <!-- React Components -->
-    <script type="text/babel" src="js/components/HomeProgressBar.jsx"></script>
-    <script type="text/babel" src="js/components/TodayProgressBar.jsx"></script>
     
     <!-- Progress Bar Helpers and Main Application -->
     <script src="js/progressBarHelpers.js"></script>

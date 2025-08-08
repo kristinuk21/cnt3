@@ -1,6 +1,20 @@
 /**
  * Constants - Application-wide constants and enums
  * Follows SOLID principles by providing stable abstractions
+ * 
+ * Usage:
+ * - TIME: Time-related constants in milliseconds
+ * - DAYS: Day of week constants (0-6)
+ * - PROGRESS: Progress calculation constraints
+ * - ELEMENTS: DOM element IDs
+ * - CSS_CLASSES: CSS class names
+ * - LOG_LEVELS: Logging levels
+ * 
+ * Example:
+ * ```js
+ * const eightHours = CONSTANTS.TIME.EIGHT_HOURS;
+ * const mondayIndex = CONSTANTS.DAYS.MONDAY;
+ * ```
  */
 const CONSTANTS = {
     // Time constants (in milliseconds)

@@ -73,24 +73,50 @@ class DatabaseService {
     }
 
     async initialize() {
-        if (!window.initSqlJs) {
-            throw new Error(CONFIG.MESSAGES.ERROR.SQL_JS_NOT_LOADED);
+        try {
+            // Check SQL.js availability
+            if (typeof window.initSqlJs !== 'function') {
+                throw new Error('SQL.js initialization function not found. Try clearing browser cache and reloading.');
+            }
+
+            // Check if localStorage is available
+            if (!window.localStorage) {
+                throw new Error('localStorage is not available. Make sure your browser supports it and is not in private browsing mode.');
+            }
+
+            try {
+                const SQL = await window.initSqlJs({ 
+                    locateFile: file => `${CONFIG.DATABASE.ASSETS_PATH}${file}` 
+                });
+
+                const dbData = localStorage.getItem(this.LOCALSTORAGE_KEY);
+
+                if (dbData) {
+                    try {
+                        const binaryArray = Uint8Array.from(atob(dbData), c => c.charCodeAt(0));
+                        this.db = new SQL.Database(binaryArray);
+                    } catch (dbLoadError) {
+                        throw new Error(`Failed to load existing database: ${dbLoadError.message}. Try clearing browser data.`);
+                    }
+                    this._migrateTables();
+                } else {
+                    this.db = new SQL.Database();
+                    this._createTables();
+                    this._saveDatabase();
+                }
+
+                UtilsService.log('Database initialized successfully');
+                return this.db;
+
+            } catch (sqlError) {
+                throw new Error(`Failed to initialize SQL.js: ${sqlError.message}. Check your internet connection and try again.`);
+            }
+
+        } catch (error) {
+            const errorMessage = `Database initialization failed: ${error.message}`;
+            UtilsService.log(errorMessage, 'error');
+            throw new Error(errorMessage);
         }
-
-        const SQL = await window.initSqlJs({ locateFile: file => `${CONFIG.DATABASE.ASSETS_PATH}${file}` });
-        const dbData = localStorage.getItem(this.LOCALSTORAGE_KEY);
-
-        if (dbData) {
-            this.db = new SQL.Database(Uint8Array.from(atob(dbData), c => c.charCodeAt(0)));
-            this._migrateTables();
-        } else {
-            this.db = new SQL.Database();
-            this._createTables();
-            this._saveDatabase();
-        }
-
-        UtilsService.log('Database initialized successfully');
-        return this.db;
     }
 
     /**
@@ -162,10 +188,23 @@ class DatabaseService {
     startBreak() {
         if (!this.db) return;
         const now = new Date();
-        this.db.run("INSERT INTO breaks (start, end) VALUES (?, NULL)", [now.toISOString()]);
-        this._saveDatabase();
-        const timeStr = UtilsService.formatDate(now, 'time');
-        this.addLog(`Break started at ${timeStr}`);
+        // First check if there's already an active break
+        if (this.isBreakActive()) {
+            console.warn('Cannot start break: Another break is already active');
+            return;
+        }
+        // Add the new break
+        try {
+            this.db.run("INSERT INTO breaks (start, end) VALUES (?, NULL)", [now.toISOString()]);
+            this._saveDatabase();
+            const timeStr = UtilsService.formatDate(now, 'time');
+            this.addLog(`Break started at ${timeStr}`);
+            console.log('Break started successfully at:', timeStr);
+            return true;
+        } catch (error) {
+            console.error('Error starting break:', error);
+            return false;
+        }
     }
 
 
@@ -193,7 +232,13 @@ class DatabaseService {
 
     getBreaks() {
         if (!this.db) return [];
-        const stmt = this.db.prepare("SELECT * FROM breaks ORDER BY id DESC");
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+        const stmt = this.db.prepare("SELECT * FROM breaks WHERE start LIKE ? ORDER BY id DESC");
+        stmt.bind([`${todayStr}%`]);  // Bind the parameter for the LIKE query
         const breaks = [];
         while (stmt.step()) {
             breaks.push(stmt.getAsObject());

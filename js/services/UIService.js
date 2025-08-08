@@ -17,8 +17,11 @@ class UIService {
             html += `<div class="mb-2"><strong>Early start time:</strong> ${UtilsService.formatDate(data.earlyStart, 'time')}</div>`;
         }
 
-        // Start Early button (only if not started early)
-        if (!data.hasEarlyStart) {
+        // Start Early button (only if not started early and before regular start time)
+        const now = new Date();
+        const workStart = new Date();
+        workStart.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
+        if (!data.hasEarlyStart && now < workStart) {
             html += `<div class="d-flex justify-content-center mb-3">
                 <button id="startEarlyBtn" class="btn btn-warning px-4">Start Early</button>
             </div>`;
@@ -31,15 +34,21 @@ class UIService {
             data.breaks.forEach(breakItem => {
                 const startTime = UtilsService.formatDate(new Date(breakItem.start), 'time');
                 const endTime = breakItem.end ? UtilsService.formatDate(new Date(breakItem.end), 'time') : 'Ongoing';
-                html += `<div class="break-item mb-2 p-2 bg-secondary rounded"><small>Break: ${startTime} - ${endTime}</small></div>`;
+                html += `<div class="break-item mb-2 p-2 bg-secondary rounded">
+                    <small>Break: ${startTime} - ${endTime}</small>
+                    <small class="ms-2">(${breakItem.durationStr})</small>
+                </div>`;
             });
             html += '</div>';
         }
 
+        // Determine if a break is active
+        const hasActiveBreak = data.breaks && data.breaks.some(b => !b.end);
+
         // Break buttons
         html += `<div class="d-flex justify-content-between gap-3 mb-4">
-            <button id="startBreakBtn" class="btn btn-success flex-fill">Start Break</button>
-            <button id="endBreakBtn" class="btn btn-danger flex-fill">End Break</button>
+            <button id="startBreakBtn" class="btn btn-success flex-fill"${hasActiveBreak ? ' disabled' : ''}>Start Break</button>
+            <button id="endBreakBtn" class="btn btn-danger flex-fill"${!hasActiveBreak ? ' disabled' : ''}>End Break</button>
         </div>`;
 
         // Reset Day button
@@ -70,13 +79,24 @@ class UIService {
     _initializeElements() {
         return {
             // Details tab elements
+            // Period details
             currentDate: document.getElementById('currentDate'),
             previousStartDay: document.getElementById('previousStartDay'),
             nextEndDay: document.getElementById('nextEndDay'),
             remainingDays: document.getElementById('remainingDays'),
+            
+            // Today's details
             todayWorkingDayFlag: document.getElementById('todayWorkingDayFlag'),
             todayWorkingHoursFlag: document.getElementById('todayWorkingHoursFlag'),
+            todayStartTime: document.getElementById('todayStartTime'),
+            expectedEndTime: document.getElementById('expectedEndTime'),
             remainingHours: document.getElementById('remainingHours'),
+            todayProgress: document.getElementById('todayProgress'),
+            
+            // Break details
+            currentBreakStatus: document.getElementById('currentBreakStatus'),
+            totalBreakDuration: document.getElementById('totalBreakDuration'),
+            breakCount: document.getElementById('breakCount'),
             
             // Logs tab elements
             logsContent: document.getElementById('logsContent'),
@@ -91,13 +111,35 @@ class UIService {
      * @param {Object} data - Data object containing all calculated values
      */
     updateDetailsSection(data) {
-        this._updateElement(this.elements.currentDate, data.currentDate);
-        this._updateElement(this.elements.previousStartDay, data.previousStartDay);
-        this._updateElement(this.elements.nextEndDay, data.nextEndDay);
-        this._updateElement(this.elements.remainingDays, data.remainingDays);
-        this._updateElement(this.elements.todayWorkingDayFlag, data.isWorkingDay);
-        this._updateElement(this.elements.todayWorkingHoursFlag, data.isWorkingHours);
-        this._updateElement(this.elements.remainingHours, `${data.remainingHours.hours}h ${data.remainingHours.minutes}m`);
+        // Helper to safely update elements with data
+        const updateElement = (elementId, content) => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = content;
+            }
+        };
+
+        // Update period information
+        updateElement('currentDate', data.currentDate);
+        updateElement('previousStartDay', data.previousStartDay);
+        updateElement('nextEndDay', data.nextEndDay);
+        updateElement('remainingDays', data.remainingDays);
+
+        // Update today's status
+        updateElement('todayWorkingDayFlag', data.isWorkingDay);
+        updateElement('todayWorkingHoursFlag', data.isWorkingHours);
+        updateElement('todayStartTime', data.startTime);
+        updateElement('expectedEndTime', data.expectedEndTime);
+        updateElement('remainingHours', data.remainingHours);
+        updateElement('todayProgress', data.todayProgress);
+
+        // Update break information
+        updateElement('currentBreakStatus', data.currentBreakStatus);
+        updateElement('totalBreakDuration', data.totalBreakDuration);
+        updateElement('breakCount', data.breakCount);
+
+        // For debugging
+        console.log('Updating details section with:', data);
     }
 
     /**
@@ -147,16 +189,6 @@ class UIService {
         if (!this.elements.breakModal) return;
         const modal = new bootstrap.Modal(this.elements.breakModal);
         modal.show();
-    }
-
-    /**
-     * Update breaks list in modal
-     * @param {Array} breaks - Array of break objects
-     * @deprecated This method is no longer used since breaks are handled in updateTodayModal
-     */
-    updateBreaksList(breaks) {
-        // This method is kept for backward compatibility but is no longer used
-        console.warn('updateBreaksList is deprecated. Use updateTodayModal instead.');
     }
 
     /**

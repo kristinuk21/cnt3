@@ -40,7 +40,6 @@ class TabController {
     _updateDetailsTab() {
         // Get all data from the centralized progress calculation service
         const todayData = this.progressCalculationService.getTodayProgressData();
-        const remainingTime = this.progressCalculationService.calculateRemainingTime();
 
         const formatDate = (date) => {
             return date.toLocaleDateString('en-GB', {
@@ -74,7 +73,10 @@ class TabController {
             isWorkingHours: todayData.isBeforeHours ? 'Before working hours' :
                           todayData.isAfterHours ? 'After working hours' :
                           todayData.isWorkingDay ? 'During working hours' : 'Non-working day',
-            remainingHours: remainingTime.formatted,
+            remainingHours: {
+                hours: todayData.remainingHours,
+                minutes: todayData.remainingMinutes
+            },
             startTime: todayData.startTime,
             expectedEndTime: todayData.endTime,
 
