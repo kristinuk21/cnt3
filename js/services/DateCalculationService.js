@@ -36,20 +36,18 @@ class DateCalculationService {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        // For August 7 (between 10th and 25th):
-        // We should return July 25, 2025 (the last period start)
+        // For August 13 (between 10th and 25th):
+        // We should return August 10 (the last working day)
         let targetDate;
 
         if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
-            // On or after 25th, use 25th of current month
+            // On or after SECOND_DAY, use SECOND_DAY of current month
             targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.SECOND_DAY);
         } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
-            // Between 10th and 24th, use 25th of previous month
-            const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-            const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-            targetDate = new Date(prevYear, prevMonth, CONFIG.PERIODS.SECOND_DAY);
+            // Between FIRST_DAY and SECOND_DAY, use FIRST_DAY of current month
+            targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.FIRST_DAY);
         } else {
-            // Before 10th, use 25th of previous month
+            // Before FIRST_DAY, use SECOND_DAY of previous month
             const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
             const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
             targetDate = new Date(prevYear, prevMonth, CONFIG.PERIODS.SECOND_DAY);
@@ -68,20 +66,20 @@ class DateCalculationService {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        // For August 7 (between 10th and 25th):
-        // We should return August 11 (next working day after August 10)
+        // For August 13 (between 10th and 25th):
+        // We should return August 25 (the next working day)
         let targetDate;
 
         if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
-            // On or after 25th, use 10th of next month
+            // On or after SECOND_DAY, use FIRST_DAY of next month
             const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
             const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
             targetDate = new Date(nextYear, nextMonth, CONFIG.PERIODS.FIRST_DAY);
         } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
-            // Between 10th and 24th, use 25th of current month
+            // Between FIRST_DAY and SECOND_DAY, use SECOND_DAY of current month
             targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.SECOND_DAY);
         } else {
-            // Before 10th, use 10th of current month
+            // Before FIRST_DAY, use FIRST_DAY of current month
             targetDate = new Date(currentYear, currentMonth, CONFIG.PERIODS.FIRST_DAY);
         }
 
