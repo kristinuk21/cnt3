@@ -45,7 +45,7 @@
               fontWeight: 500
             }}
           >
-            {remainingDays} day{remainingDays === 1 ? '' : 's'} left
+            {remainingDays} day{remainingDays === 1 ? '' : 's'}
           </span>
         </div>
       </div>

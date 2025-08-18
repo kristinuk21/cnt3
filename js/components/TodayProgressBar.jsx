@@ -19,7 +19,7 @@
     };
     
     const { progress, remainingHours, remainingMinutes, endTime, isAfterHours, isBeforeHours } = data;
-  let displayText = `${remainingHours}h ${remainingMinutes}m left`;
+  let displayText = `${remainingHours}h ${remainingMinutes}m`;
   let barClass = "progress-bar bg-success text-dark progress-bar-striped progress-bar-animated rounded-pill d-flex align-items-center";
   
   if (isAfterHours) {

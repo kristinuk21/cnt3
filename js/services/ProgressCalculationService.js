@@ -135,7 +135,7 @@ class ProgressCalculationService {
         const breakMs = this._calculateBreakDuration(breaks);
         workEnd = new Date(workEnd.getTime() + breakMs);
         
-        return workEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return workEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     }
 
     /**
