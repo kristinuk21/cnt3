@@ -5,6 +5,39 @@
     gap: 1rem !important;
 }
 
+/* ===== NAVIGATION TABS ===== */
+.nav-pills {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* IE/Edge */
+}
+
+.nav-pills::-webkit-scrollbar {
+    display: none !important; /* Chrome/Safari/Opera */
+}
+
+.nav-item {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.nav-link {
+    white-space: nowrap !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.9rem !important;
+    text-align: center !important;
+}
+
+/* Responsive adjustments for very small screens */
+@media (max-width: 400px) {
+    .nav-link {
+        padding: 0.5rem 0.5rem !important;
+        font-size: 0.85rem !important;
+    }
+}
+
 /* ===== DETAILS CARDS ===== */
 .card {
     transition: all 0.2s ease;

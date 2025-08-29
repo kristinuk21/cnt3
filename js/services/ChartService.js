@@ -24,6 +24,13 @@ class ChartService {
         const ctx = document.getElementById('budgetChart');
         if (!ctx) return;
 
+        // Check if Chart.js is available
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
         // Destroy existing chart if it exists
         if (this.charts.budget) {
             this.charts.budget.destroy();
@@ -31,7 +38,7 @@ class ChartService {
 
         const chartData = this._prepareBudgetData();
         
-        this.charts.budget = new Chart(ctx, {
+        this.charts.budget = new ChartConstructor(ctx, {
             type: 'line',
             data: {
                 labels: chartData.labels,
@@ -99,6 +106,13 @@ class ChartService {
         const ctx = document.getElementById('trendsChart');
         if (!ctx) return;
 
+        // Check if Chart.js is available
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
         // Destroy existing chart if it exists
         if (this.charts.trends) {
             this.charts.trends.destroy();
@@ -106,7 +120,7 @@ class ChartService {
 
         const chartData = this._prepareTrendsData();
         
-        this.charts.trends = new Chart(ctx, {
+        this.charts.trends = new ChartConstructor(ctx, {
             type: 'scatter',
             data: {
                 datasets: [
