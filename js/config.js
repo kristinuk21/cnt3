@@ -38,11 +38,13 @@ const CONFIG = {
     MESSAGES: {
         SUCCESS: {
             DAY_STARTED_EARLY: 'Day started early!',
-            LOGS_RESET: 'Logs have been reset successfully.'
+            LOGS_RESET: 'Logs have been reset successfully.',
+            BUDGET_UPDATED: 'Budget updated successfully!'
         },
         ERROR: {
             DB_INIT_FAILED: 'Failed to initialize database',
-            SQL_JS_NOT_LOADED: 'sql.js not loaded'
+            SQL_JS_NOT_LOADED: 'sql.js not loaded',
+            BUDGET_INVALID: 'Invalid budget amount'
         },
         INFO: {
             PAGE_RELOADED: 'Page reloaded',
@@ -51,7 +53,11 @@ const CONFIG = {
             BREAK_STARTED: 'Break started',
             BREAK_ENDED: 'Break ended',
             LOGS_RESET: 'Logs reset',
-            STARTED_DAY_EARLY: 'Started day early'
+            STARTED_DAY_EARLY: 'Started day early',
+            BUDGET_INCREASED: 'Budget increased',
+            BUDGET_DECREASED: 'Budget decreased',
+            BUDGET_SET: 'Budget set manually',
+            BUDGET_RESET: 'Budget reset to 0'
         }
     }
 };

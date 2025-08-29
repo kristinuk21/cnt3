@@ -5,6 +5,7 @@
 class EventService {
     constructor() {
         this.listeners = new Map();
+        this.customListeners = new Map(); // For custom events like logsUpdated, tasksUpdated
         this.isInitialized = false;
     }
 
@@ -61,6 +62,7 @@ class EventService {
         // Specific tab events
         const detailsTab = document.getElementById('details-tab');
         const logsTab = document.getElementById('logs-tab');
+        const chartsTab = document.getElementById('charts-tab');
 
         if (detailsTab) {
             this._addEventListener(detailsTab, 'shown.bs.tab', () => {
@@ -71,6 +73,12 @@ class EventService {
         if (logsTab) {
             this._addEventListener(logsTab, 'shown.bs.tab', () => {
                 tabController.handleLogsTabShown();
+            });
+        }
+
+        if (chartsTab) {
+            this._addEventListener(chartsTab, 'shown.bs.tab', () => {
+                tabController.handleChartsTabShown();
             });
         }
     }
@@ -138,6 +146,60 @@ class EventService {
             });
         });
         this.listeners.clear();
+        this.customListeners.clear();
         this.isInitialized = false;
+    }
+
+    /**
+     * Add a custom event listener
+     * @param {string} eventName - Name of the custom event
+     * @param {Function} handler - Event handler function
+     */
+    on(eventName, handler) {
+        if (!this.customListeners.has(eventName)) {
+            this.customListeners.set(eventName, []);
+        }
+        this.customListeners.get(eventName).push(handler);
+    }
+
+    /**
+     * Remove a custom event listener
+     * @param {string} eventName - Name of the custom event
+     * @param {Function} handler - Event handler function to remove
+     */
+    off(eventName, handler) {
+        if (!this.customListeners.has(eventName)) return;
+        
+        const handlers = this.customListeners.get(eventName);
+        const index = handlers.indexOf(handler);
+        if (index > -1) {
+            handlers.splice(index, 1);
+        }
+    }
+
+    /**
+     * Emit a custom event
+     * @param {string} eventName - Name of the custom event
+     * @param {*} data - Data to pass to event handlers
+     */
+    emit(eventName, data) {
+        console.log(`EventService: Emitting custom event '${eventName}'`, data || '(no data)');
+        
+        if (!this.customListeners.has(eventName)) {
+            console.log(`EventService: No listeners for event '${eventName}'`);
+            return;
+        }
+        
+        const handlers = this.customListeners.get(eventName);
+        console.log(`EventService: Found ${handlers.length} listeners for event '${eventName}'`);
+        
+        handlers.forEach((handler, index) => {
+            try {
+                console.log(`EventService: Calling handler ${index + 1} for '${eventName}'`);
+                handler(data);
+            } catch (error) {
+                console.error(`EventService: Error in handler for '${eventName}':`, error);
+            }
+        });
     }
 }

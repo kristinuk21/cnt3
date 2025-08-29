@@ -21,6 +21,6 @@ class ProgressController {
      */
     handleDaysProgressClick() {
         this.databaseService.addLog(CONFIG.MESSAGES.INFO.OVERALL_PROGRESS_CLICKED);
-        // Could add additional functionality here in the future
+        this.modalController.showBudgetModal();
     }
 }

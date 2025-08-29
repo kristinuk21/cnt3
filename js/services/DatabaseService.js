@@ -141,6 +141,18 @@ class DatabaseService {
         } catch (e) {
             this.db.run("CREATE TABLE IF NOT EXISTS early_starts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT)");
         }
+        // Check for budgets table
+        try {
+            this.db.exec("SELECT 1 FROM budgets LIMIT 1");
+        } catch (e) {
+            this.db.run("CREATE TABLE IF NOT EXISTS budgets (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL DEFAULT 0, timestamp TEXT, action TEXT)");
+        }
+        // Check for tasks table
+        try {
+            this.db.exec("SELECT 1 FROM tasks LIMIT 1");
+        } catch (e) {
+            this.db.run("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT, completed INTEGER DEFAULT 0, timestamp TEXT)");
+        }
         this._saveDatabase();
     }
 
@@ -148,6 +160,8 @@ class DatabaseService {
         this.db.run("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT, timestamp TEXT)");
         this.db.run("CREATE TABLE IF NOT EXISTS breaks (id INTEGER PRIMARY KEY AUTOINCREMENT, start TEXT, end TEXT)");
         this.db.run("CREATE TABLE IF NOT EXISTS early_starts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT)");
+        this.db.run("CREATE TABLE IF NOT EXISTS budgets (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL DEFAULT 0, timestamp TEXT, action TEXT)");
+        this.db.run("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT, completed INTEGER DEFAULT 0, timestamp TEXT)");
     }
 
     _saveDatabase() {
@@ -159,10 +173,15 @@ class DatabaseService {
 
     // Log operations
     addLog(message) {
-        if (!this.db) return;
+        if (!this.db) {
+            console.error('addLog: Database not available');
+            return;
+        }
+        console.log('addLog: Adding log entry:', message);
         const timestamp = new Date().toISOString();
         this.db.run("INSERT INTO logs (message, timestamp) VALUES (?, ?)", [message, timestamp]);
         this._saveDatabase();
+        console.log('addLog: Log entry saved successfully');
     }
 
     getLogs() {
@@ -266,5 +285,178 @@ class DatabaseService {
         this._saveDatabase();
         const timeStr = UtilsService.formatDate(now, 'time');
         this.addLog(`Started day early at ${timeStr}`);
+    }
+
+    // Budget operations
+    getCurrentBudget() {
+        if (!this.db) return 0;
+        const stmt = this.db.prepare("SELECT amount FROM budgets ORDER BY id DESC LIMIT 1");
+        let budget = 0;
+        if (stmt.step()) {
+            budget = stmt.getAsObject().amount || 0;
+        }
+        stmt.free();
+        return budget;
+    }
+
+    setBudget(amount, action = 'set') {
+        if (!this.db) return;
+        const timestamp = new Date().toISOString();
+        this.db.run("INSERT INTO budgets (amount, timestamp, action) VALUES (?, ?, ?)", [amount, timestamp, action]);
+        this._saveDatabase();
+        this.addLog(`Budget ${action}: ${amount} RON`);
+    }
+
+    adjustBudget(adjustment, action) {
+        const currentBudget = this.getCurrentBudget();
+        const newBudget = Math.max(0, currentBudget + adjustment);
+        this.setBudget(newBudget, action);
+        return newBudget;
+    }
+
+    getBudgetHistory() {
+        if (!this.db) return [];
+        const stmt = this.db.prepare("SELECT * FROM budgets ORDER BY id DESC");
+        const history = [];
+        while (stmt.step()) {
+            history.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return history;
+    }
+
+    // Task management methods
+    addTask(description) {
+        if (!this.db) return null;
+        
+        const timestamp = new Date().toISOString();
+        
+        try {
+            this.db.run("INSERT INTO tasks (description, completed, timestamp) VALUES (?, 0, ?)", [description, timestamp]);
+            this._saveDatabase();
+            this.addLog(`Task added: ${description}`);
+            
+            const taskId = this.getLastInsertedTaskId();
+            
+            // If last_insert_rowid() returns 0, let's verify the task was actually added
+            if (taskId === 0) {
+                // Get the most recent task with this description and timestamp
+                const stmt = this.db.prepare("SELECT id FROM tasks WHERE description = ? AND timestamp = ? ORDER BY id DESC LIMIT 1");
+                stmt.bind([description, timestamp]);
+                if (stmt.step()) {
+                    const row = stmt.getAsObject();
+                    const verifiedId = row.id;
+                    stmt.free();
+                    return verifiedId;
+                } else {
+                    stmt.free();
+                    return null;
+                }
+            }
+            
+            return taskId;
+        } catch (error) {
+            console.error('Error adding task:', error);
+            return null;
+        }
+    }
+
+    getTasks() {
+        if (!this.db) return [];
+        const stmt = this.db.prepare("SELECT * FROM tasks ORDER BY completed ASC, timestamp DESC");
+        const tasks = [];
+        while (stmt.step()) {
+            tasks.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return tasks;
+    }
+
+    toggleTaskCompletion(taskId) {
+        if (!this.db) return;
+        const stmt = this.db.prepare("SELECT completed, description FROM tasks WHERE id = ?");
+        stmt.bind([taskId]);
+        if (stmt.step()) {
+            const task = stmt.getAsObject();
+            const newCompleted = task.completed ? 0 : 1;
+            this.db.run("UPDATE tasks SET completed = ? WHERE id = ?", [newCompleted, taskId]);
+            this._saveDatabase();
+            this.addLog(`Task ${newCompleted ? 'completed' : 'uncompleted'}: ${task.description}`);
+        }
+        stmt.free();
+    }
+
+    deleteTask(taskId) {
+        if (!this.db) {
+            console.error('Database not available for deleteTask');
+            return;
+        }
+        
+        console.log('deleteTask: Starting deletion for taskId:', taskId);
+        
+        const stmt = this.db.prepare("SELECT description FROM tasks WHERE id = ?");
+        stmt.bind([taskId]);
+        let description = '';
+        if (stmt.step()) {
+            description = stmt.getAsObject().description;
+            console.log('deleteTask: Found task to delete:', description);
+        } else {
+            console.warn('deleteTask: No task found with id:', taskId);
+        }
+        stmt.free();
+        
+        console.log('deleteTask: Executing DELETE query');
+        this.db.run("DELETE FROM tasks WHERE id = ?", [taskId]);
+        this._saveDatabase();
+        
+        if (description) {
+            console.log('deleteTask: Adding log entry for deleted task');
+            this.addLog(`Task deleted: ${description}`);
+        } else {
+            console.warn('deleteTask: No description found, not logging');
+        }
+        
+        console.log('deleteTask: Deletion completed');
+    }
+
+    getTaskStats() {
+        if (!this.db) return { total: 0, completed: 0, remaining: 0, percentage: 0 };
+        
+        const totalStmt = this.db.prepare("SELECT COUNT(*) as count FROM tasks");
+        totalStmt.step();
+        const total = totalStmt.getAsObject().count;
+        totalStmt.free();
+        
+        const completedStmt = this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE completed = 1");
+        completedStmt.step();
+        const completed = completedStmt.getAsObject().count;
+        completedStmt.free();
+        
+        const remaining = total - completed;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+        
+        return { total, completed, remaining, percentage };
+    }
+
+    getLastInsertedTaskId() {
+        if (!this.db) return null;
+        
+        try {
+            const stmt = this.db.prepare("SELECT last_insert_rowid() as id");
+            const hasResult = stmt.step();
+            
+            if (hasResult) {
+                const row = stmt.getAsObject();
+                const result = row.id;
+                stmt.free();
+                return result;
+            } else {
+                stmt.free();
+                return null;
+            }
+        } catch (error) {
+            console.error('Error getting last inserted task ID:', error);
+            return null;
+        }
     }
 }

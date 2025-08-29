@@ -18,6 +18,14 @@ class ModalController {
     }
 
     /**
+     * Show budget modal and update its content
+     */
+    showBudgetModal() {
+        this._updateBudgetModalContent();
+        this.uiService.showBudgetModal();
+    }
+
+    /**
      * Handle modal show event
      */
     handleModalShow() {
@@ -67,6 +75,30 @@ class ModalController {
                 hasEarlyStart: false,
                 totalBreakDuration: 'No breaks taken',
                 activeBreak: null
+            });
+        }
+    }
+
+    /**
+     * Update budget modal content with current budget information
+     */
+    _updateBudgetModalContent() {
+        try {
+            // Get budget data from the progress calculation service
+            const homeData = this.progressCalculationService.getHomeProgressData();
+            
+            this.uiService.updateBudgetModal({
+                currentBudget: homeData.currentBudget,
+                remainingDays: homeData.remainingDays,
+                budgetPerDay: homeData.budgetPerDay
+            });
+        } catch (error) {
+            console.error('Error updating budget modal content:', error);
+            // Provide fallback data if there's an error
+            this.uiService.updateBudgetModal({
+                currentBudget: 0,
+                remainingDays: 0,
+                budgetPerDay: 0
             });
         }
     }

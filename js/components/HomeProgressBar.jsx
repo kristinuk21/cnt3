@@ -9,8 +9,8 @@
    */
   window.HomeProgressBar = function HomeProgressBar({ onClick }) {
     // Get data from the global store
-    const data = window.getProgressData()?.home || { progress: 0, endDate: '', remainingDays: 0 };
-    const { progress, endDate, remainingDays } = data;
+    const data = window.getProgressData()?.home || { progress: 0, endDate: '', remainingDays: 0, budgetPerDay: 0 };
+    const { progress, endDate, remainingDays, budgetPerDay } = data;
     
     return (
       <div className="mb-4">
@@ -18,16 +18,15 @@
           <label htmlFor="daysProgress" className="form-label mb-0">Overall</label>
           <span className="text-end"><span id="homeEndDate">{endDate}</span></span>
         </div>
-        <div className="progress bg-secondary rounded-pill position-relative" style={{height: '30px'}}>
+        <div className="progress bg-secondary rounded-pill position-relative" style={{height: '30px', cursor: 'pointer'}} onClick={onClick}>
           <div
             id="daysProgress"
             className="progress-bar bg-info text-dark progress-bar-striped progress-bar-animated rounded-pill d-flex justify-content-center align-items-center"
             role="progressbar"
-            style={{width: `${progress}%`, minWidth: '40px', cursor: 'pointer'}}
+            style={{width: `${progress}%`, minWidth: '40px'}}
             aria-valuenow={progress}
             aria-valuemin="0"
             aria-valuemax="100"
-            onClick={onClick}
           >
           </div>
           <span
@@ -45,7 +44,7 @@
               fontWeight: 500
             }}
           >
-            {remainingDays} day{remainingDays === 1 ? '' : 's'}
+            {remainingDays} day{remainingDays === 1 ? '' : 's'} at {budgetPerDay}/day
           </span>
         </div>
       </div>

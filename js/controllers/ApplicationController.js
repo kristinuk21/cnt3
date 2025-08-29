@@ -41,7 +41,10 @@ class ApplicationController {
             }
             
             this.services.database.addLog(CONFIG.MESSAGES.INFO.PAGE_RELOADED);
-            this.isInitialized = true;
+            // Make controllers accessible globally for component callbacks
+        window.applicationController = this;
+        
+        this.isInitialized = true;
             
             UtilsService.log('Application initialized successfully');
         } catch (error) {
@@ -72,6 +75,12 @@ class ApplicationController {
             this.services.database
         );
 
+        // Initialize chart service (depends on database and dateCalculation)
+        this.services.chart = new ChartService(
+            this.services.database,
+            this.services.dateCalculation
+        );
+
         // Inject dependencies
         this.services.ui.setNotificationService(this.services.notification);
     }
@@ -95,7 +104,8 @@ class ApplicationController {
             this.services.ui,
             this.services.dateCalculation,
             this.services.database,
-            this.services.progressCalculation
+            this.services.progressCalculation,
+            this.services.chart
         );
 
         this.controllers.button = new ButtonController(
@@ -103,6 +113,18 @@ class ApplicationController {
             this.services.ui,
             this.controllers.tab,
             this.controllers.modal
+        );
+
+        this.controllers.budget = new BudgetController(
+            this.services.database,
+            this.services.ui,
+            this.controllers.modal
+        );
+
+        this.controllers.task = new TaskController(
+            this.services.database,
+            this.services.ui,
+            this.services.event
         );
     }
 
@@ -145,6 +167,13 @@ class ApplicationController {
      */
     getController(controllerName) {
         return this.controllers[controllerName];
+    }
+
+    /**
+     * Get task controller
+     */
+    get taskController() {
+        return this.controllers.task;
     }
 
     /**

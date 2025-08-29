@@ -1,16 +1,7 @@
 /**
  * ProgressCalculationService - Centralized progress calculations
  * Follows Single Responsibility and DRY principles
- * Consolidates all progress-related calculations            // Calculate times
-        const defaultStartTime = new Date();
-        defaultStartTime.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
-        const actualStartTime = (earlyStart instanceof Date && earlyStart < defaultStartTime) ? earlyStart : defaultStartTime;
-        
-        // For early start check
-        const standardWorkStart = new Date();
-        standardWorkStart.setHours(CONFIG.WORKING_HOURS.START, 0, 0, 0);
-        
-        const result = {e place
+ * Consolidates all progress-related calculations
  */
 class ProgressCalculationService {
     constructor(dateCalculationService, databaseService) {
@@ -84,14 +75,14 @@ class ProgressCalculationService {
         }
         
         // Debug logging
-        console.log('Progress Calc Debug:', {
-            now: now.toLocaleTimeString(),
-            workStart: workStart.toLocaleTimeString(),
-            workEnd: workEnd.toLocaleTimeString(),
-            breakMs,
-            breakMins: Math.floor(breakMs / (60 * 1000)),
-            remainingMs: workEnd - now
-        });
+        // console.log('Progress Calc Debug:', {
+        //     now: now.toLocaleTimeString(),
+        //     workStart: workStart.toLocaleTimeString(),
+        //     workEnd: workEnd.toLocaleTimeString(),
+        //     breakMs,
+        //     breakMins: Math.floor(breakMs / (60 * 1000)),
+        //     remainingMs: workEnd - now
+        // });
         
         // Calculate remaining time
         const remainingMs = workEnd - now;
@@ -146,14 +137,18 @@ class ProgressCalculationService {
         const progress = this.calculateDaysProgress();
         const endDate = this.dateService.formatDateForDisplay(this.dateService.computeNextEndDay());
         const remainingDays = this.dateService.computeRemainingDaysUntilNextEnd();
+        const currentBudget = this.databaseService.getCurrentBudget();
+        const budgetPerDay = remainingDays > 0 ? Math.round(currentBudget / remainingDays) : 0;
         
         const result = {
             progress,
             endDate,
-            remainingDays
+            remainingDays,
+            currentBudget,
+            budgetPerDay
         };
         
-        console.log('ProgressCalculationService.getHomeProgressData:', result);
+        // console.log('ProgressCalculationService.getHomeProgressData:', result);
         return result;
     }
 
@@ -218,7 +213,7 @@ class ProgressCalculationService {
             hasEarlyStart: earlyStart instanceof Date && earlyStart < defaultStartTime
         };
         
-        console.log('Today Progress Data:', result);
+        // console.log('Today Progress Data:', result);
         return result;
     }
 

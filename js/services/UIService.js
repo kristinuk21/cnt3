@@ -84,6 +84,8 @@ class UIService {
             previousStartDay: document.getElementById('previousStartDay'),
             nextEndDay: document.getElementById('nextEndDay'),
             remainingDays: document.getElementById('remainingDays'),
+            currentBudget: document.getElementById('currentBudget'),
+            budgetPerDay: document.getElementById('budgetPerDay'),
             
             // Today's details
             todayWorkingDayFlag: document.getElementById('todayWorkingDayFlag'),
@@ -102,7 +104,9 @@ class UIService {
             logsContent: document.getElementById('logsContent'),
             
             // Modal elements
-            breakModal: document.getElementById('breakModal')
+            breakModal: document.getElementById('breakModal'),
+            budgetModal: document.getElementById('budgetModal'),
+            tasksModal: document.getElementById('tasksModal')
         };
     }
 
@@ -124,6 +128,14 @@ class UIService {
         updateElement('previousStartDay', data.previousStartDay);
         updateElement('nextEndDay', data.nextEndDay);
         updateElement('remainingDays', data.remainingDays);
+        
+        // Update budget information
+        if (data.currentBudget !== undefined) {
+            updateElement('currentBudget', data.currentBudget);
+        }
+        if (data.budgetPerDay !== undefined) {
+            updateElement('budgetPerDay', data.budgetPerDay);
+        }
 
         // Update today's status
         updateElement('todayWorkingDayFlag', data.isWorkingDay);
@@ -166,16 +178,17 @@ class UIService {
             <table class="table table-dark table-striped table-bordered">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Message</th>
                         <th>Timestamp</th>
+                        <th>Message</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
         logs.forEach(log => {
-            html += `<tr><td>${log.id}</td><td>${log.message}</td><td>${log.timestamp}</td></tr>`;
+            // Clean up timestamp by removing milliseconds
+            const cleanTimestamp = log.timestamp.replace(/\.\d{3}Z?$/, '').replace('T', ' ');
+            html += `<tr><td>${cleanTimestamp}</td><td>${log.message}</td></tr>`;
         });
 
         html += '</tbody></table>';
@@ -192,6 +205,24 @@ class UIService {
     }
 
     /**
+     * Show budget modal
+     */
+    showBudgetModal() {
+        if (!this.elements.budgetModal) return;
+        const modal = new bootstrap.Modal(this.elements.budgetModal);
+        modal.show();
+    }
+
+    /**
+     * Show tasks modal
+     */
+    showTasksModal() {
+        if (!this.elements.tasksModal) return;
+        const modal = new bootstrap.Modal(this.elements.tasksModal);
+        modal.show();
+    }
+
+    /**
      * Show alert message
      * @param {string} message - Alert message
      * @param {string} type - Alert type (success, warning, error, info)
@@ -203,6 +234,31 @@ class UIService {
             // Fallback to browser alert if notification service not available
             alert(message);
         }
+    }
+
+    /**
+     * Update the Budget modal with current budget information
+     * @param {Object} data - Budget data including current budget, per day calculation, etc.
+     */
+    updateBudgetModal(data) {
+        const container = document.getElementById('budgetModalContent');
+        const budgetInput = document.getElementById('budgetInput');
+        
+        if (!container) return;
+
+        // Update the input field with current budget
+        if (budgetInput) {
+            budgetInput.value = data.currentBudget || 0;
+        }
+
+        let html = '';
+        
+        // Display only budget per day
+        html += `<div class="mb-3">
+            <div><strong>Budget per Day:</strong> ${data.budgetPerDay || 0} RON/day</div>
+        </div>`;
+
+        container.innerHTML = html;
     }
 
     /**

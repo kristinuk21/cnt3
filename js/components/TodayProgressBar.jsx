@@ -31,17 +31,17 @@
   }
 
   return (
-    <div className="mb-4" onClick={onClick}>
+    <div className="mb-4">
       <div className="d-flex justify-content-between align-items-center mb-1">
         <label htmlFor="hoursProgress" className="form-label mb-0">Today</label>
         <span className="text-end"><span id="homeEndTime">{endTime}</span></span>
       </div>
-      <div className="progress bg-secondary rounded-pill position-relative" style={{height: '30px'}}>
+      <div className="progress bg-secondary rounded-pill position-relative" style={{height: '30px', cursor: 'pointer'}} onClick={onClick}>
         <div
           id="hoursProgress"
           className={barClass}
           role="progressbar"
-          style={{width: `${progress}%`, minWidth: '40px', cursor: 'pointer'}}
+          style={{width: `${progress}%`, minWidth: '40px'}}
           aria-valuenow={progress}
           aria-valuemin="0"
           aria-valuemax="100"

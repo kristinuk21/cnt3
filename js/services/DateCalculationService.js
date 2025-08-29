@@ -172,14 +172,14 @@ class DateCalculationService {
         const progress = UtilsService.calculatePercentage(daysPassed, totalDays);
         
         // Debug logging
-        console.log('Days Progress Debug:', {
-            prevStart: prevStartStr,
-            nextEnd: nextEndStr,
-            remainingDays,
-            totalDays,
-            daysPassed,
-            progress: progress + '%'
-        });
+        // console.log('Days Progress Debug:', {
+        //     prevStart: prevStartStr,
+        //     nextEnd: nextEndStr,
+        //     remainingDays,
+        //     totalDays,
+        //     daysPassed,
+        //     progress: progress + '%'
+        // });
         
         return progress;
     }

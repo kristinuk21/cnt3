@@ -28,7 +28,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Setup progress bar refresh system
         const progressData = {
             today: null,
-            home: null
+            home: null,
+            tasks: null
         };
 
         window.getProgressData = () => ({...progressData});
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             try {
                 progressData.today = app.getService('progressCalculation').getTodayProgressData();
                 progressData.home = app.getService('progressCalculation').getHomeProgressData();
+                progressData.tasks = app.getService('database').getTaskStats();
                 
                 if (window.renderProgressBars) {
                     window.renderProgressBars();

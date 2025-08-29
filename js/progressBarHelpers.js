@@ -93,19 +93,27 @@
             try {
                 if (homeContainer) {
                     const homeProps = getHomeProgressBarProps();
-                    console.log('Home progress props:', homeProps);
-                    ReactDOM.render(
-                        React.createElement(window.HomeProgressBar, homeProps),
-                        homeContainer
+                    // console.log('Home progress props:', homeProps);
+                    
+                    // Use React 18 createRoot API
+                    if (!homeContainer._reactRoot) {
+                        homeContainer._reactRoot = ReactDOM.createRoot(homeContainer);
+                    }
+                    homeContainer._reactRoot.render(
+                        React.createElement(window.HomeProgressBar, homeProps)
                     );
                 }
                 
                 if (todayContainer) {
                     const todayProps = getTodayProgressBarProps();
-                    console.log('Today progress props:', todayProps);
-                    ReactDOM.render(
-                        React.createElement(window.TodayProgressBar, todayProps),
-                        todayContainer
+                    // console.log('Today progress props:', todayProps);
+                    
+                    // Use React 18 createRoot API
+                    if (!todayContainer._reactRoot) {
+                        todayContainer._reactRoot = ReactDOM.createRoot(todayContainer);
+                    }
+                    todayContainer._reactRoot.render(
+                        React.createElement(window.TodayProgressBar, todayProps)
                     );
                 }
             } catch (error) {
@@ -114,8 +122,41 @@
         });
     }
 
-    // Export functions to global scope
-    window.getHomeProgressBarProps = getHomeProgressBarProps;
-    window.getTodayProgressBarProps = getTodayProgressBarProps;
-    window.renderProgressBars = renderProgressBars;
+    /**
+     * Get all progress data for React components
+     * @returns {Object} Progress data for all components
+     */
+    function getProgressData() {
+        const app = window.applicationController || window.app;
+        if (!app?.services?.progressCalculation || !app?.services?.database) {
+            console.warn('Required services not available');
+            return {
+                home: { progress: 0, endDate: '', remainingDays: 0, budgetPerDay: 0 },
+                today: { 
+                    progress: 0, 
+                    remainingHours: 0, 
+                    remainingMinutes: 0, 
+                    endTime: '', 
+                    isBeforeHours: false,
+                    isAfterHours: false 
+                },
+                tasks: { total: 0, completed: 0, remaining: 0, percentage: 0 }
+            };
+        }
+        
+        const progressService = app.services.progressCalculation;
+        const databaseService = app.services.database;
+        const homeProgressData = progressService.getHomeProgressData();
+        const todayProgressData = progressService.getTodayProgressData();
+        const taskStats = databaseService.getTaskStats();
+        
+        return {
+            home: homeProgressData,
+            today: todayProgressData,
+            tasks: taskStats
+        };
+    }
+
+    // Export new function to global scope
+    window.getProgressData = getProgressData;
 })();
