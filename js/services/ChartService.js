@@ -77,10 +77,24 @@ class ChartService {
                 scales: {
                     x: {
                         ticks: {
-                            color: '#e9ecef'
+                            color: function(context) {
+                                // Color weekend days differently
+                                const index = context.index;
+                                const date = new Date(chartData.periodStart);
+                                date.setDate(chartData.periodStart.getDate() + index);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            }
                         },
                         grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
+                            color: function(context) {
+                                // Different grid color for weekend days
+                                const index = context.index;
+                                const date = new Date(chartData.periodStart);
+                                date.setDate(chartData.periodStart.getDate() + index);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
+                            }
                         }
                     },
                     y: {
@@ -129,8 +143,9 @@ class ChartService {
                         data: chartData.earlyStarts,
                         backgroundColor: '#ffc107',
                         borderColor: '#ffc107',
-                        pointRadius: 6,
-                        pointHoverRadius: 8
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointStyle: 'line'
                     },
                     {
                         label: 'Page Reloads',
@@ -182,14 +197,26 @@ class ChartService {
                             }
                         },
                         ticks: {
-                            color: '#e9ecef'
+                            color: function(context) {
+                                // Color weekend days differently for trends chart
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            }
                         },
                         grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
+                            color: function(context) {
+                                // Different grid color for weekend days in trends chart
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
+                            }
                         }
                     },
                     y: {
-                        min: 0,
+                        min: 6 * 60, // Start at 6:00 AM (360 minutes)
                         max: 24 * 60, // 24 hours in minutes
                         ticks: {
                             color: '#e9ecef',
