@@ -15,6 +15,7 @@ class ChartService {
     initializeCharts() {
         this.renderBudgetChart();
         this.renderTrendsChart();
+        this.renderBudgetPerDayTrendsChart();
     }
 
     /**
@@ -70,7 +71,8 @@ class ChartService {
                 plugins: {
                     legend: {
                         labels: {
-                            color: '#e9ecef'
+                            color: '#e9ecef',
+                            usePointStyle: true
                         }
                     }
                 },
@@ -164,7 +166,8 @@ class ChartService {
                 plugins: {
                     legend: {
                         labels: {
-                            color: '#e9ecef'
+                            color: '#e9ecef',
+                            usePointStyle: true
                         }
                     },
                     tooltip: {
@@ -229,11 +232,144 @@ class ChartService {
                         },
                         grid: {
                             color: 'rgba(233, 236, 239, 0.2)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Render budget per day trends chart with smoothing
+     */
+    renderBudgetPerDayTrendsChart() {
+        const ctx = document.getElementById('budgetPerDayTrendsChart');
+        if (!ctx) return;
+
+        // Check if Chart.js is available
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
+        // Destroy existing chart if it exists
+        if (this.charts.budgetPerDayTrends) {
+            this.charts.budgetPerDayTrends.destroy();
+        }
+
+        const chartData = this._prepareBudgetPerDayTrendsData();
+        
+        this.charts.budgetPerDayTrends = new ChartConstructor(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Raw Data',
+                        data: chartData.rawData,
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        tension: 0,
+                        borderWidth: 2,
+                        pointBackgroundColor: '#ffc107'
+                    },
+                    {
+                        label: '7-day Average',
+                        data: chartData.smoothedData,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        pointRadius: 4,
+                        pointHoverRadius: 8,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#28a745'
+                    },
+                    {
+                        label: 'Trend Line',
+                        data: chartData.trendLine,
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.05)',
+                        pointRadius: 0,
+                        tension: 0,
+                        borderWidth: 2,
+                        borderDash: [8, 4],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e9ecef',
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return `${context.dataset.label}: ${Math.round(value)} RON/day`;
+                            },
+                            title: function(tooltipItems) {
+                                const date = new Date(tooltipItems[0].parsed.x);
+                                return date.toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                });
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            displayFormats: {
+                                day: 'MMM dd'
+                            }
+                        },
+                        ticks: {
+                            color: function(context) {
+                                // Color weekend days differently
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            }
+                        },
+                        grid: {
+                            color: function(context) {
+                                // Different grid color for weekend days
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
+                            }
                         },
                         title: {
                             display: true,
-                            text: 'Time of Day',
+                            text: 'Date',
                             color: '#e9ecef'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#e9ecef',
+                            callback: function(value) {
+                                return Math.round(value) + ' RON/day';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.2)'
                         }
                     }
                 }
@@ -401,6 +537,189 @@ class ChartService {
     }
 
     /**
+     * Prepare budget per day trends chart data with smoothing and trend analysis
+     * @private
+     * @returns {Object} Chart data
+     */
+    _prepareBudgetPerDayTrendsData() {
+        const logs = this.databaseService.getLogs();
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        // Extract budget per day calculations from logs and budget history
+        const budgetPerDayData = [];
+        const budgetPerDayMap = new Map();
+        
+        // Method 1: Extract from logs that contain budget per day mentions
+        logs.forEach(log => {
+            const timestamp = new Date(log.timestamp);
+            const dateKey = timestamp.toISOString().split('T')[0];
+            
+            // Look for budget-related log entries
+            if (log.message.includes('Budget') && log.message.includes('RON')) {
+                // Try to extract budget amount from log message
+                const budgetMatch = log.message.match(/(\d+(?:\.\d+)?)\s*RON/);
+                if (budgetMatch) {
+                    const budgetAmount = parseFloat(budgetMatch[1]);
+                    
+                    // Calculate budget per day for this timestamp
+                    const remainingDays = this._calculateRemainingDaysForDate(timestamp);
+                    const budgetPerDay = remainingDays > 0 ? budgetAmount / remainingDays : 0;
+                    
+                    if (budgetPerDay > 0) {
+                        budgetPerDayMap.set(dateKey, {
+                            x: timestamp.getTime(),
+                            y: budgetPerDay,
+                            date: timestamp
+                        });
+                    }
+                }
+            }
+        });
+        
+        // Method 2: Calculate from budget history
+        budgetHistory.forEach(entry => {
+            const timestamp = new Date(entry.timestamp);
+            const dateKey = timestamp.toISOString().split('T')[0];
+            
+            if (!budgetPerDayMap.has(dateKey)) {
+                const remainingDays = this._calculateRemainingDaysForDate(timestamp);
+                const budgetPerDay = remainingDays > 0 ? entry.amount / remainingDays : 0;
+                
+                if (budgetPerDay > 0) {
+                    budgetPerDayMap.set(dateKey, {
+                        x: timestamp.getTime(),
+                        y: budgetPerDay,
+                        date: timestamp
+                    });
+                }
+            }
+        });
+        
+        // Method 3: Add today's current budget per day calculation
+        const currentBudget = this.databaseService.getCurrentBudget();
+        const currentRemainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
+        const currentBudgetPerDay = currentRemainingDays > 0 ? currentBudget / currentRemainingDays : 0;
+        
+        if (currentBudgetPerDay > 0) {
+            const today = new Date();
+            const todayKey = today.toISOString().split('T')[0];
+            
+            // Always add/update today's data to ensure current budget per day is shown
+            budgetPerDayMap.set(todayKey, {
+                x: today.getTime(),
+                y: currentBudgetPerDay,
+                date: today
+            });
+        }
+        
+        // Convert map to sorted array
+        const rawDataPoints = Array.from(budgetPerDayMap.values()).sort((a, b) => a.x - b.x);
+        
+        // Generate smoothed data using 7-day moving average
+        const smoothedDataPoints = this._calculateMovingAverage(rawDataPoints, 7);
+        
+        // Calculate trend line using linear regression
+        const trendLinePoints = this._calculateTrendLine(rawDataPoints);
+        
+        return {
+            rawData: rawDataPoints,
+            smoothedData: smoothedDataPoints,
+            trendLine: trendLinePoints
+        };
+    }
+
+    /**
+     * Calculate remaining days for a specific date
+     * @private
+     * @param {Date} date - The date to calculate for
+     * @returns {number} Remaining days
+     */
+    _calculateRemainingDaysForDate(date) {
+        // Use the same logic as DateCalculationService but for a specific date
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
+        
+        const daysDiff = Math.ceil((endDate - date) / (1000 * 60 * 60 * 24));
+        return Math.max(0, daysDiff);
+    }
+
+    /**
+     * Calculate moving average for smoothing
+     * @private
+     * @param {Array} dataPoints - Array of data points {x, y}
+     * @param {number} windowSize - Size of moving average window
+     * @returns {Array} Smoothed data points
+     */
+    _calculateMovingAverage(dataPoints, windowSize = 7) {
+        if (dataPoints.length < windowSize) return dataPoints;
+        
+        const smoothedData = [];
+        
+        for (let i = 0; i < dataPoints.length; i++) {
+            const start = Math.max(0, i - Math.floor(windowSize / 2));
+            const end = Math.min(dataPoints.length, start + windowSize);
+            
+            const windowData = dataPoints.slice(start, end);
+            const average = windowData.reduce((sum, point) => sum + point.y, 0) / windowData.length;
+            
+            smoothedData.push({
+                x: dataPoints[i].x,
+                y: average
+            });
+        }
+        
+        return smoothedData;
+    }
+
+    /**
+     * Calculate trend line using linear regression
+     * @private
+     * @param {Array} dataPoints - Array of data points {x, y}
+     * @returns {Array} Trend line points
+     */
+    _calculateTrendLine(dataPoints) {
+        if (dataPoints.length < 2) return [];
+        
+        const n = dataPoints.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        
+        // Convert timestamps to days for easier calculation
+        const firstTimestamp = dataPoints[0].x;
+        
+        dataPoints.forEach(point => {
+            const x = (point.x - firstTimestamp) / (1000 * 60 * 60 * 24); // Convert to days
+            const y = point.y;
+            
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumXX += x * x;
+        });
+        
+        // Calculate linear regression coefficients
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+        
+        // Generate trend line points
+        const trendPoints = [];
+        const startX = (dataPoints[0].x - firstTimestamp) / (1000 * 60 * 60 * 24);
+        const endX = (dataPoints[dataPoints.length - 1].x - firstTimestamp) / (1000 * 60 * 60 * 24);
+        
+        trendPoints.push({
+            x: dataPoints[0].x,
+            y: slope * startX + intercept
+        });
+        
+        trendPoints.push({
+            x: dataPoints[dataPoints.length - 1].x,
+            y: slope * endX + intercept
+        });
+        
+        return trendPoints;
+    }
+
+    /**
      * Update charts with new data
      */
     updateCharts() {
@@ -417,6 +736,14 @@ class ChartService {
             this.charts.trends.data.datasets[0].data = trendsData.earlyStarts;
             this.charts.trends.data.datasets[1].data = trendsData.pageReloads;
             this.charts.trends.update();
+        }
+
+        if (this.charts.budgetPerDayTrends) {
+            const budgetPerDayData = this._prepareBudgetPerDayTrendsData();
+            this.charts.budgetPerDayTrends.data.datasets[0].data = budgetPerDayData.rawData;
+            this.charts.budgetPerDayTrends.data.datasets[1].data = budgetPerDayData.smoothedData;
+            this.charts.budgetPerDayTrends.data.datasets[2].data = budgetPerDayData.trendLine;
+            this.charts.budgetPerDayTrends.update();
         }
     }
 
