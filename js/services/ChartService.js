@@ -39,31 +39,73 @@ class ChartService {
 
         const chartData = this._prepareBudgetData();
         
+        // Create datasets starting with historical periods
+        const datasets = [];
+        
+        // Add previous periods datasets (oldest to newest)
+        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0) {
+            // Sort by period index (oldest first)
+            const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
+            
+            sortedPreviousPeriods.forEach((periodData, index) => {
+                const periodIndex = periodData.periodIndex;
+                const opacity = Math.max(0.15, 0.8 - (periodIndex - 1) * 0.2); // Fade older periods
+                const lineWidth = Math.max(1, 4 - periodIndex); // Thinner lines for older periods
+                
+                // Generate period label
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthName = monthNames[periodData.month];
+                const halfLabel = periodData.isFirstHalf ? '1st' : '2nd';
+                const label = `${monthName} ${periodData.year} (${halfLabel} half)`;
+                
+                datasets.push({
+                    label: label,
+                    data: periodData.data,
+                    borderColor: `rgba(108, 117, 125, ${opacity})`, // Gray with varying opacity
+                    backgroundColor: 'transparent',
+                    tension: 0.1,
+                    borderWidth: lineWidth,
+                    pointRadius: 0, // No points for historical data
+                    pointHoverRadius: 0,
+                    spanGaps: true,
+                    order: 10 + periodIndex, // Higher order number = rendered behind
+                });
+            });
+        }
+        
+        // Add current period datasets (on top)
+        datasets.push(
+            {
+                label: 'Projected Budget',
+                data: chartData.projected,
+                borderColor: '#17a2b8',
+                backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                tension: 0.1,
+                borderDash: [5, 5],
+                borderWidth: 2,
+                order: 2 // Rendered on top
+            },
+            {
+                label: 'Actual Budget',
+                data: chartData.actual,
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                tension: 0.1,
+                spanGaps: true, // Connect points across null values
+                pointRadius: 5,
+                pointHoverRadius: 8,
+                showLine: true,
+                borderWidth: 3,
+                order: 1 // Rendered on top
+            }
+        );
+        
         this.charts.budget = new ChartConstructor(ctx, {
             type: 'line',
             data: {
                 labels: chartData.labels,
-                datasets: [
-                    {
-                        label: 'Projected Budget',
-                        data: chartData.projected,
-                        borderColor: '#17a2b8',
-                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
-                        tension: 0.1,
-                        borderDash: [5, 5]
-                    },
-                    {
-                        label: 'Actual Budget',
-                        data: chartData.actual,
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        tension: 0.1,
-                        spanGaps: true, // Connect points across null values
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
-                        showLine: true
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -378,6 +420,173 @@ class ChartService {
     }
 
     /**
+     * Get previous periods data for burndown comparison
+     * @private
+     * @param {number} periodsCount - Number of previous periods to retrieve (default: 3)
+     * @returns {Array} Array of previous period data
+     */
+    _getPreviousPeriodsData(periodsCount = 3) {
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        const periods = [];
+        
+        // Calculate previous periods
+        for (let i = 1; i <= periodsCount; i++) {
+            const periodData = this._calculatePreviousPeriod(i);
+            if (periodData) {
+                // Filter budget history for this period
+                const periodBudgetHistory = budgetHistory.filter(entry => {
+                    const entryDate = new Date(entry.timestamp);
+                    return entryDate >= periodData.periodStart && entryDate <= periodData.periodEnd;
+                });
+                
+                if (periodBudgetHistory.length > 0) {
+                    periods.push({
+                        ...periodData,
+                        budgetHistory: periodBudgetHistory,
+                        periodIndex: i
+                    });
+                }
+            }
+        }
+        
+        return periods;
+    }
+
+    /**
+     * Calculate period dates for a previous period
+     * @private
+     * @param {number} periodsBack - How many periods back (1 = last period, 2 = two periods ago, etc.)
+     * @returns {Object|null} Period data with start and end dates
+     */
+    _calculatePreviousPeriod(periodsBack) {
+        const now = new Date();
+        const currentDay = now.getDate();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        
+        // Calculate how many periods to go back from current period
+        let targetMonth = currentMonth;
+        let targetYear = currentYear;
+        let isFirstHalf;
+        
+        // Determine current period position
+        if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
+            // In second half of current month (25th onwards)
+            isFirstHalf = false;
+        } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
+            // In first half of current month (10th to 24th)
+            isFirstHalf = true;
+        } else {
+            // Before first day (1st to 9th), so we're in previous month's second half
+            isFirstHalf = false;
+            targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        }
+        
+        // Go back the specified number of periods
+        for (let i = 0; i < periodsBack; i++) {
+            if (isFirstHalf) {
+                // Currently first half, go to previous month's second half
+                targetMonth = targetMonth === 0 ? 11 : targetMonth - 1;
+                targetYear = targetMonth === 11 ? targetYear - 1 : targetYear;
+                isFirstHalf = false;
+            } else {
+                // Currently second half, go to same month's first half
+                isFirstHalf = true;
+            }
+        }
+        
+        // Calculate period start and end dates
+        let periodStart, periodEnd;
+        
+        if (isFirstHalf) {
+            // First half: 10th to 25th
+            periodStart = new Date(targetYear, targetMonth, CONFIG.PERIODS.FIRST_DAY);
+            periodEnd = new Date(targetYear, targetMonth, CONFIG.PERIODS.SECOND_DAY);
+        } else {
+            // Second half: 25th to 10th of next month
+            periodStart = new Date(targetYear, targetMonth, CONFIG.PERIODS.SECOND_DAY);
+            const nextMonth = targetMonth === 11 ? 0 : targetMonth + 1;
+            const nextYear = targetMonth === 11 ? targetYear + 1 : targetYear;
+            periodEnd = new Date(nextYear, nextMonth, CONFIG.PERIODS.FIRST_DAY);
+        }
+        
+        // Adjust for working days
+        const periodStartStr = this.dateCalculationService.findFirstWorkingDayOnOrAfter(periodStart);
+        const periodEndStr = this.dateCalculationService.findFirstWorkingDayOnOrAfter(periodEnd);
+        
+        const [startMonth, startDay, startYear] = periodStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = periodEndStr.split('/').map(Number);
+        
+        return {
+            periodStart: new Date(startYear, startMonth - 1, startDay),
+            periodEnd: new Date(endYear, endMonth - 1, endDay),
+            isFirstHalf,
+            month: targetMonth,
+            year: targetYear
+        };
+    }
+
+    /**
+     * Transform previous period data to current period timeline
+     * @private
+     * @param {Object} previousPeriod - Previous period data
+     * @param {Object} currentPeriod - Current period data
+     * @returns {Array} Transformed budget data aligned to current period
+     */
+    _transformPreviousPeriodToCurrentTimeline(previousPeriod, currentPeriod) {
+        const { budgetHistory, periodStart: prevStart, periodEnd: prevEnd } = previousPeriod;
+        const { periodStart: currStart, periodEnd: currEnd } = currentPeriod;
+        
+        // Calculate period lengths
+        const prevPeriodDays = Math.ceil((prevEnd - prevStart) / (1000 * 60 * 60 * 24));
+        const currPeriodDays = Math.ceil((currEnd - currStart) / (1000 * 60 * 60 * 24));
+        
+        // Create budget data for previous period
+        const prevActual = [];
+        for (let i = 0; i <= prevPeriodDays; i++) {
+            prevActual[i] = null;
+        }
+        
+        // Fill in actual budget data
+        budgetHistory.forEach(entry => {
+            const entryDate = new Date(entry.timestamp);
+            entryDate.setHours(0, 0, 0, 0);
+            
+            const dayIndex = Math.floor((entryDate - prevStart) / (1000 * 60 * 60 * 24));
+            if (dayIndex >= 0 && dayIndex <= prevPeriodDays) {
+                prevActual[dayIndex] = entry.amount;
+            }
+        });
+        
+        // Fill forward missing values
+        let lastKnownValue = null;
+        for (let i = 0; i <= prevPeriodDays; i++) {
+            if (prevActual[i] !== null) {
+                lastKnownValue = prevActual[i];
+            } else if (lastKnownValue !== null) {
+                prevActual[i] = lastKnownValue;
+            }
+        }
+        
+        // Transform to current period timeline (shift so both end at the same point)
+        const transformedData = [];
+        for (let i = 0; i <= currPeriodDays; i++) {
+            // Map current period day to previous period day
+            const progress = i / currPeriodDays; // 0 to 1
+            const prevDayIndex = Math.floor(progress * prevPeriodDays);
+            
+            if (prevDayIndex >= 0 && prevDayIndex < prevActual.length && prevActual[prevDayIndex] !== null) {
+                transformedData[i] = prevActual[prevDayIndex];
+            } else {
+                transformedData[i] = null;
+            }
+        }
+        
+        return transformedData;
+    }
+
+    /**
      * Prepare budget burndown chart data
      * @private
      * @returns {Object} Chart data
@@ -468,6 +677,24 @@ class ChartService {
             // Leave future days as null (no data available)
         }
 
+        // Get previous periods data
+        const previousPeriods = this._getPreviousPeriodsData(3);
+        const previousPeriodsData = [];
+        
+        // Transform previous periods to current timeline
+        const currentPeriodData = { periodStart, periodEnd };
+        
+        previousPeriods.forEach(prevPeriod => {
+            const transformedData = this._transformPreviousPeriodToCurrentTimeline(prevPeriod, currentPeriodData);
+            previousPeriodsData.push({
+                data: transformedData,
+                periodIndex: prevPeriod.periodIndex,
+                month: prevPeriod.month,
+                year: prevPeriod.year,
+                isFirstHalf: prevPeriod.isFirstHalf
+            });
+        });
+
         // Debug logging
         console.log('Budget Chart Data:', {
             totalDays,
@@ -475,10 +702,11 @@ class ChartService {
             currentBudget,
             periodStart: periodStart.toLocaleDateString(),
             periodEnd: periodEnd.toLocaleDateString(),
-            actualData: actual.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null)
+            actualData: actual.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
+            previousPeriods: previousPeriodsData.length
         });
 
-        return { labels, projected, actual, periodStart };
+        return { labels, projected, actual, periodStart, previousPeriodsData };
     }
 
     /**
@@ -724,11 +952,8 @@ class ChartService {
      */
     updateCharts() {
         if (this.charts.budget) {
-            const budgetData = this._prepareBudgetData();
-            this.charts.budget.data.labels = budgetData.labels;
-            this.charts.budget.data.datasets[0].data = budgetData.projected;
-            this.charts.budget.data.datasets[1].data = budgetData.actual;
-            this.charts.budget.update();
+            // For budget chart, it's easier to destroy and recreate due to dynamic datasets
+            this.renderBudgetChart();
         }
 
         if (this.charts.trends) {
