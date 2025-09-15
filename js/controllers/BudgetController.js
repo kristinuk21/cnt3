@@ -48,6 +48,7 @@ class BudgetController {
             this.databaseService.setBudget(amount, 'manual_set');
             this.uiService.showAlert(`Budget set to ${amount} RON`, 'success');
             this._refreshBudgetModal();
+            this._updateCharts();
         }
     }
 
@@ -60,6 +61,7 @@ class BudgetController {
         const newBudget = this.databaseService.adjustBudget(adjustment, action);
         this.uiService.showAlert(`Budget ${action}d to ${newBudget} RON`, 'success');
         this._refreshBudgetModal();
+        this._updateCharts();
     }
 
     /**
@@ -72,6 +74,22 @@ class BudgetController {
         const budgetInput = document.getElementById('budgetInput');
         if (budgetInput) {
             budgetInput.value = this.databaseService.getCurrentBudget();
+        }
+    }
+
+    /**
+     * Update charts when budget changes
+     * @private
+     */
+    _updateCharts() {
+        // Update charts if they exist and are initialized
+        const app = window.applicationController || window.app;
+        if (app && app.services && app.services.chart) {
+            try {
+                app.services.chart.updateCharts();
+            } catch (error) {
+                console.error('Error updating charts after budget change:', error);
+            }
         }
     }
 }
