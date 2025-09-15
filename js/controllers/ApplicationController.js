@@ -83,6 +83,8 @@ class ApplicationController {
 
         // Inject dependencies
         this.services.ui.setNotificationService(this.services.notification);
+        this.services.ui.setDatabaseService(this.services.database);
+        this.services.ui.setProgressCalculationService(this.services.progressCalculation);
     }
 
     /**

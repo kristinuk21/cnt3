@@ -169,3 +169,51 @@
 .cursor-pointer {
     cursor: pointer !important;
 }
+
+/* ===== LOG FILTERS STYLING ===== */
+.log-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.log-filters .form-check {
+    margin-bottom: 0;
+}
+
+.log-filters .form-check-input {
+    background-color: #495057;
+    border-color: #6c757d;
+}
+
+.log-filters .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.log-filters .form-check-input:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.log-filters .form-check-label {
+    font-size: 0.9rem;
+    user-select: none;
+    cursor: pointer;
+}
+
+/* Responsive log filters */
+@media (max-width: 768px) {
+    .log-filters {
+        width: 100%;
+    }
+    
+    .log-filters .d-flex {
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .log-filters .form-check {
+        margin-bottom: 0;
+    }
+}

@@ -89,7 +89,33 @@
                                 </section>
                             </div>
                             <div class="tab-pane fade" id="logs" role="tabpanel" aria-labelledby="logs-tab">
-                                <button id="resetLogsBtn" class="btn btn-danger mb-3">Reset Logs</button>
+                                <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-3">
+                                    <div class="d-flex gap-2">
+                                        <button id="resetLogsBtn" class="btn btn-danger">Reset Logs</button>
+                                        <button id="debugDataBtn" class="btn btn-info btn-sm">Debug Data</button>
+                                    </div>
+                                    <div class="log-filters">
+                                        <span class="text-light me-3 d-none d-md-inline">Filter by:</span>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="filterBudget" checked>
+                                                <label class="form-check-label text-light" for="filterBudget">Budget</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="filterReloads" checked>
+                                                <label class="form-check-label text-light" for="filterReloads">Reloads</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="filterClicks" checked>
+                                                <label class="form-check-label text-light" for="filterClicks">Clicks</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="filterOther" checked>
+                                                <label class="form-check-label text-light" for="filterOther">Other</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div id="logsContent" class="mb-3"></div>
                             </div>
                             <div class="tab-pane fade" id="charts" role="tabpanel" aria-labelledby="charts-tab">

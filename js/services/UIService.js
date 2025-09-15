@@ -61,6 +61,8 @@ class UIService {
     constructor() {
         this.elements = this._initializeElements();
         this.notificationService = null; // Will be injected by ApplicationController
+        this.databaseService = null; // Will be injected by ApplicationController
+        this.progressCalculationService = null; // Will be injected by ApplicationController
     }
 
     /**
@@ -69,6 +71,22 @@ class UIService {
      */
     setNotificationService(notificationService) {
         this.notificationService = notificationService;
+    }
+
+    /**
+     * Set database service dependency
+     * @param {DatabaseService} databaseService 
+     */
+    setDatabaseService(databaseService) {
+        this.databaseService = databaseService;
+    }
+
+    /**
+     * Set progress calculation service dependency
+     * @param {ProgressCalculationService} progressCalculationService 
+     */
+    setProgressCalculationService(progressCalculationService) {
+        this.progressCalculationService = progressCalculationService;
     }
 
     /**
@@ -174,25 +192,159 @@ class UIService {
             return;
         }
 
-        let html = `
+        // Get current filter states
+        const filters = this._getLogFilters();
+        
+        // Categorize all logs first to get counts
+        const categorizedLogs = logs.map(log => ({
+            ...log,
+            category: this._getLogCategory(log)
+        }));
+        
+        // Count logs by category
+        const categoryCounts = {
+            budget: 0,
+            reloads: 0,
+            clicks: 0,
+            other: 0
+        };
+        
+        categorizedLogs.forEach(log => {
+            categoryCounts[log.category]++;
+        });
+        
+        // Filter logs based on selected categories
+        const filteredLogs = categorizedLogs.filter(log => filters[log.category]);
+
+        // Create summary header
+        const totalLogs = logs.length;
+        const filteredCount = filteredLogs.length;
+        
+        // Get current budget info for context (if services are available)
+        let currentBudget = 'N/A';
+        let budgetPerDay = 'N/A';
+        
+        if (this.databaseService) {
+            currentBudget = this.databaseService.getCurrentBudget();
+        }
+        
+        if (this.progressCalculationService) {
+            const homeData = this.progressCalculationService.getHomeProgressData();
+            budgetPerDay = homeData.budgetPerDay || 'N/A';
+        }
+        
+        const summaryHtml = `
+            <div class="alert alert-info mb-3">
+                <div class="row">
+                    <div class="col-md-8">
+                        <strong>Log Summary:</strong> 
+                        Showing ${filteredCount} of ${totalLogs} logs | 
+                        Budget: ${categoryCounts.budget} | 
+                        Reloads: ${categoryCounts.reloads} | 
+                        Clicks: ${categoryCounts.clicks} | 
+                        Other: ${categoryCounts.other}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        let html = summaryHtml + `
             <table class="table table-dark table-striped table-bordered">
                 <thead>
                     <tr>
                         <th>Timestamp</th>
+                        <th>Category</th>
                         <th>Message</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
-        logs.forEach(log => {
+        filteredLogs.forEach(log => {
             // Clean up timestamp by removing milliseconds
             const cleanTimestamp = log.timestamp.replace(/\.\d{3}Z?$/, '').replace('T', ' ');
-            html += `<tr><td>${cleanTimestamp}</td><td>${log.message}</td></tr>`;
+            const categoryBadge = this._getCategoryBadge(log.category);
+            html += `<tr><td>${cleanTimestamp}</td><td>${categoryBadge}</td><td>${log.message}</td></tr>`;
         });
 
         html += '</tbody></table>';
+        
+        if (filteredLogs.length === 0) {
+            html = summaryHtml + '<em>No logs match the current filters.</em>';
+        }
+        
         this.elements.logsContent.innerHTML = html;
+    }
+
+    /**
+     * Get current filter states
+     * @private
+     * @returns {Object} Filter states
+     */
+    _getLogFilters() {
+        return {
+            budget: document.getElementById('filterBudget')?.checked ?? true,
+            reloads: document.getElementById('filterReloads')?.checked ?? true,
+            clicks: document.getElementById('filterClicks')?.checked ?? true,
+            other: document.getElementById('filterOther')?.checked ?? true
+        };
+    }
+
+    /**
+     * Determine if a log should be shown based on current filters
+     * @private
+     * @param {Object} log - Log object with category property
+     * @param {Object} filters - Filter states
+     * @returns {boolean} Whether to show the log
+     */
+    _shouldShowLog(log, filters) {
+        return filters[log.category];
+    }
+
+    /**
+     * Categorize a log message
+     * @private
+     * @param {Object} log - Log object
+     * @returns {string} Category name
+     */
+    _getLogCategory(log) {
+        const message = log.message.toLowerCase();
+        
+        // Budget category - any budget-related operations
+        if (message.includes('budget')) {
+            return 'budget';
+        }
+        
+        // Reloads category - page reload events
+        if (message.includes('page reloaded') || message.includes('reloaded')) {
+            return 'reloads';
+        }
+        
+        // Click actions category - user interaction events
+        if (message.includes('clicked') || 
+            message.includes('progress bar') ||
+            message.includes('progress clicked')) {
+            return 'clicks';
+        }
+        
+        // Default to other for breaks, tasks, early starts, etc.
+        return 'other';
+    }
+
+    /**
+     * Get a styled badge for the category
+     * @private
+     * @param {string} category - Category name
+     * @returns {string} HTML badge
+     */
+    _getCategoryBadge(category) {
+        const badges = {
+            budget: '<span class="badge bg-success">Budget</span>',
+            reloads: '<span class="badge bg-info">Reload</span>',
+            clicks: '<span class="badge bg-warning">Click</span>',
+            other: '<span class="badge bg-secondary">Other</span>'
+        };
+        return badges[category] || badges.other;
     }
 
     /**

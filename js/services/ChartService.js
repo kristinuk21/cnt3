@@ -42,8 +42,12 @@ class ChartService {
         // Create datasets starting with historical periods
         const datasets = [];
         
-        // Add previous periods datasets (oldest to newest)
-        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0) {
+        // Check if we have meaningful data to display
+        const hasActualData = chartData.actual.some(val => val !== null);
+        const hasProjectedData = chartData.projected.some(val => val !== null);
+        
+        // Add previous periods datasets (oldest to newest) - only if we have current period data
+        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0 && (hasActualData || hasProjectedData)) {
             // Sort by period index (oldest first)
             const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
             
@@ -74,9 +78,9 @@ class ChartService {
             });
         }
         
-        // Add current period datasets (on top)
-        datasets.push(
-            {
+        // Add current period datasets (on top) - only if we have data
+        if (hasProjectedData) {
+            datasets.push({
                 label: 'Projected Budget',
                 data: chartData.projected,
                 borderColor: '#17a2b8',
@@ -85,8 +89,11 @@ class ChartService {
                 borderDash: [5, 5],
                 borderWidth: 2,
                 order: 2 // Rendered on top
-            },
-            {
+            });
+        }
+        
+        if (hasActualData) {
+            datasets.push({
                 label: 'Actual Budget',
                 data: chartData.actual,
                 borderColor: '#28a745',
@@ -98,8 +105,22 @@ class ChartService {
                 showLine: true,
                 borderWidth: 3,
                 order: 1 // Rendered on top
-            }
-        );
+            });
+        }
+        
+        // If no meaningful data, show a placeholder message
+        if (!hasActualData && !hasProjectedData) {
+            datasets.push({
+                label: 'No budget data for current period',
+                data: [], // Empty data
+                borderColor: '#6c757d',
+                backgroundColor: 'transparent',
+                tension: 0.1,
+                pointRadius: 0,
+                showLine: false,
+                order: 1
+            });
+        }
         
         this.charts.budget = new ChartConstructor(ctx, {
             type: 'line',
@@ -626,74 +647,169 @@ class ChartService {
             actual[i] = null;
         }
 
-        // Add actual budget data points from history
-        budgetHistory.forEach(entry => {
+        // Filter budget history to only include entries from the current period
+        const currentPeriodBudgetHistory = budgetHistory.filter(entry => {
+            const entryDate = new Date(entry.timestamp);
+            // Normalize all dates to start of day for accurate comparison
+            entryDate.setHours(0, 0, 0, 0);
+            
+            const periodStartNorm = new Date(periodStart);
+            periodStartNorm.setHours(0, 0, 0, 0);
+            
+            const periodEndNorm = new Date(periodEnd);
+            periodEndNorm.setHours(23, 59, 59, 999); // Include the entire end day
+            
+            const isInPeriod = entryDate >= periodStartNorm && entryDate <= periodEndNorm;
+            
+            // Debug logging for each entry
+            console.log('Budget History Entry:', {
+                timestamp: entry.timestamp,
+                entryDate: entryDate.toLocaleDateString(),
+                amount: entry.amount,
+                action: entry.action,
+                periodStart: periodStartNorm.toLocaleDateString(),
+                periodEnd: periodEndNorm.toLocaleDateString(),
+                isInPeriod: isInPeriod
+            });
+            
+            return isInPeriod;
+        });
+
+        // Add actual budget data points from current period history only
+        // For each day, use the LATEST budget transaction amount for that day
+        const dailyBudgetMap = new Map();
+        
+        currentPeriodBudgetHistory.forEach(entry => {
             const entryDate = new Date(entry.timestamp);
             entryDate.setHours(0, 0, 0, 0); // Normalize to start of day
             
             const dayIndex = Math.floor((entryDate - periodStart) / (1000 * 60 * 60 * 24));
+            const dateKey = entryDate.toISOString().split('T')[0];
+            
+            console.log('Processing budget entry:', {
+                timestamp: entry.timestamp,
+                entryDate: entryDate.toLocaleDateString(),
+                amount: entry.amount,
+                action: entry.action,
+                dayIndex: dayIndex,
+                dateKey: dateKey
+            });
+            
             if (dayIndex >= 0 && dayIndex <= totalDays) {
-                actual[dayIndex] = entry.amount;
+                // Keep track of the latest (highest ID) transaction for each day
+                if (!dailyBudgetMap.has(dayIndex) || entry.id > dailyBudgetMap.get(dayIndex).id) {
+                    dailyBudgetMap.set(dayIndex, {
+                        amount: entry.amount,
+                        id: entry.id,
+                        timestamp: entry.timestamp,
+                        dayIndex: dayIndex
+                    });
+                }
             }
         });
+        
+        // Set the actual values using the latest transaction for each day
+        dailyBudgetMap.forEach((data, dayIndex) => {
+            actual[dayIndex] = data.amount;
+            console.log(`Set actual[${dayIndex}] = ${data.amount} (latest transaction: ID ${data.id})`);
+        });
 
-        // Set today's budget as a known point
-        if (todayIndex >= 0 && todayIndex <= totalDays) {
-            actual[todayIndex] = currentBudget;
-        }
+        // Don't automatically add today's budget as a data point unless there was an actual transaction today
+        // The chart should only show actual budget transactions from the database
 
-        // Create projected line based on current budget and remaining days
+        // Create projected line - only show meaningful projections
         const remainingDays = Math.max(1, totalDays - todayIndex);
-        const dailySpendRate = currentBudget / remainingDays;
-
-        for (let i = 0; i <= totalDays; i++) {
-            if (i <= todayIndex) {
-                // Backward projection: assume linear spending from unknown start to current budget
-                const daysFromStart = todayIndex;
-                if (daysFromStart > 0) {
-                    // Estimate original budget based on current position and current budget
-                    const estimatedOriginalBudget = currentBudget / (remainingDays / totalDays);
-                    const dailySpendFromStart = (estimatedOriginalBudget - currentBudget) / daysFromStart;
-                    projected[i] = Math.max(0, estimatedOriginalBudget - (dailySpendFromStart * i));
-                } else {
-                    projected[i] = currentBudget;
+        
+        // Check if we have any actual budget transactions in the current period
+        const hasCurrentPeriodData = currentPeriodBudgetHistory.length > 0;
+        
+        if (hasCurrentPeriodData && todayIndex >= 0 && todayIndex <= totalDays && currentBudget > 0) {
+            const dailySpendRate = currentBudget / remainingDays;
+            
+            // Find the last actual budget transaction to start projection from
+            let lastTransactionIndex = -1;
+            let lastTransactionAmount = currentBudget;
+            
+            for (let i = todayIndex; i >= 0; i--) {
+                if (actual[i] !== null) {
+                    lastTransactionIndex = i;
+                    lastTransactionAmount = actual[i];
+                    break;
                 }
-            } else {
-                // Forward projection: linear spending to zero
-                const daysFromToday = i - todayIndex;
-                projected[i] = Math.max(0, currentBudget - (dailySpendRate * daysFromToday));
+            }
+            
+            // Only show forward projection from the last transaction date or today, whichever is later
+            const projectionStartIndex = Math.max(lastTransactionIndex, todayIndex);
+            
+            for (let i = 0; i <= totalDays; i++) {
+                if (i >= projectionStartIndex) {
+                    // Forward projection: linear spending to zero from current budget
+                    const daysFromProjectionStart = i - todayIndex;
+                    projected[i] = Math.max(0, currentBudget - (dailySpendRate * daysFromProjectionStart));
+                } else {
+                    // No backward projection - only show actual data
+                    projected[i] = null;
+                }
+            }
+        } else {
+            // No meaningful data - don't show projections
+            for (let i = 0; i <= totalDays; i++) {
+                projected[i] = null;
             }
         }
 
-        // Fill forward actual values where we have data
+        // Fill forward actual values from the last known transaction
+        // This ensures that budget amounts persist after the transaction date
         let lastKnownValue = null;
+        let lastTransactionIndex = -1;
+        
+        // Find the most recent actual transaction
         for (let i = 0; i <= totalDays; i++) {
             if (actual[i] !== null) {
                 lastKnownValue = actual[i];
-            } else if (lastKnownValue !== null && i < todayIndex) {
-                // For past days without data, carry forward last known value
-                actual[i] = lastKnownValue;
+                lastTransactionIndex = i;
             }
-            // Leave future days as null (no data available)
+        }
+        
+        // Fill forward from the last transaction to today (or end of period if past today)
+        if (lastKnownValue !== null && lastTransactionIndex >= 0) {
+            const fillEndIndex = Math.min(totalDays, Math.max(todayIndex, lastTransactionIndex));
+            
+            console.log('Forward filling budget data:', {
+                lastKnownValue,
+                lastTransactionIndex,
+                todayIndex,
+                fillEndIndex,
+                totalDays
+            });
+            
+            for (let i = lastTransactionIndex; i <= fillEndIndex; i++) {
+                if (actual[i] === null) {
+                    actual[i] = lastKnownValue;
+                    console.log(`Forward filled actual[${i}] = ${lastKnownValue}`);
+                }
+            }
         }
 
-        // Get previous periods data
-        const previousPeriods = this._getPreviousPeriodsData(3);
-        const previousPeriodsData = [];
-        
-        // Transform previous periods to current timeline
-        const currentPeriodData = { periodStart, periodEnd };
-        
-        previousPeriods.forEach(prevPeriod => {
-            const transformedData = this._transformPreviousPeriodToCurrentTimeline(prevPeriod, currentPeriodData);
-            previousPeriodsData.push({
-                data: transformedData,
-                periodIndex: prevPeriod.periodIndex,
-                month: prevPeriod.month,
-                year: prevPeriod.year,
-                isFirstHalf: prevPeriod.isFirstHalf
+        // Get previous periods data only if we have current period data
+        let previousPeriodsData = [];
+        if (hasCurrentPeriodData) {
+            const previousPeriods = this._getPreviousPeriodsData(3);
+            
+            // Transform previous periods to current timeline
+            const currentPeriodData = { periodStart, periodEnd };
+            
+            previousPeriods.forEach(prevPeriod => {
+                const transformedData = this._transformPreviousPeriodToCurrentTimeline(prevPeriod, currentPeriodData);
+                previousPeriodsData.push({
+                    data: transformedData,
+                    periodIndex: prevPeriod.periodIndex,
+                    month: prevPeriod.month,
+                    year: prevPeriod.year,
+                    isFirstHalf: prevPeriod.isFirstHalf
+                });
             });
-        });
+        }
 
         // Debug logging
         console.log('Budget Chart Data:', {
@@ -702,7 +818,15 @@ class ChartService {
             currentBudget,
             periodStart: periodStart.toLocaleDateString(),
             periodEnd: periodEnd.toLocaleDateString(),
-            actualData: actual.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
+            currentPeriodHistoryEntries: currentPeriodBudgetHistory.length,
+            currentPeriodHistoryDates: currentPeriodBudgetHistory.map(entry => ({
+                date: new Date(entry.timestamp).toLocaleDateString(),
+                amount: entry.amount,
+                action: entry.action
+            })),
+            hasCurrentPeriodData,
+            actualDataPoints: actual.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
+            projectedDataPoints: projected.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
             previousPeriods: previousPeriodsData.length
         });
 

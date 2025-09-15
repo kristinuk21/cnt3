@@ -304,13 +304,26 @@ class DatabaseService {
         const timestamp = new Date().toISOString();
         this.db.run("INSERT INTO budgets (amount, timestamp, action) VALUES (?, ?, ?)", [amount, timestamp, action]);
         this._saveDatabase();
-        this.addLog(`Budget ${action}: ${amount} RON`);
+        this.addLog(`Budget ${action} → Total budget now: ${amount} RON`);
     }
 
     adjustBudget(adjustment, action) {
         const currentBudget = this.getCurrentBudget();
         const newBudget = Math.max(0, currentBudget + adjustment);
+        
+        // Override the log message for clearer information
+        const originalAddLog = this.addLog;
+        this.addLog = (message) => {
+            // Replace the automatic message with a more descriptive one
+            const sign = adjustment >= 0 ? '+' : '';
+            originalAddLog.call(this, `Budget ${action}: ${currentBudget} ${sign}${adjustment} → ${newBudget} RON`);
+        };
+        
         this.setBudget(newBudget, action);
+        
+        // Restore original addLog function
+        this.addLog = originalAddLog;
+        
         return newBudget;
     }
 
