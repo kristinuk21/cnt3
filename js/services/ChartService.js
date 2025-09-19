@@ -17,6 +17,7 @@ class ChartService {
         this.renderTrendsChart();
         this.renderBudgetPerDayTrendsChart();
         this.renderBudgetPerDayProjectedVsActualChart();
+        this.renderDeltaBudgetPerDayChart();
     }
 
     /**
@@ -639,6 +640,186 @@ class ChartService {
     }
 
     /**
+     * Render delta budget (spent) per day chart
+     */
+    renderDeltaBudgetPerDayChart() {
+        const ctx = document.getElementById('deltaBudgetPerDayChart');
+        if (!ctx) return;
+
+        // Check if Chart.js is available
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
+        // Destroy existing chart if it exists
+        if (this.charts.deltaBudgetPerDay) {
+            this.charts.deltaBudgetPerDay.destroy();
+        }
+
+        const chartData = this._prepareDeltaBudgetPerDayData();
+        
+        // Create datasets starting with historical periods
+        const datasets = [];
+        
+        // Check if we have meaningful data to display
+        const hasCurrentData = chartData.currentPeriodData.length > 0;
+        
+        // Add previous periods datasets (oldest to newest) - only if we have current period data
+        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0 && hasCurrentData) {
+            // Sort by period index (oldest first)
+            const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
+            
+            sortedPreviousPeriods.forEach((periodData, index) => {
+                const periodIndex = periodData.periodIndex;
+                const opacity = Math.max(0.15, 0.6 - (periodIndex - 1) * 0.15); // Fade older periods
+                const lineWidth = Math.max(1, 3 - periodIndex); // Thinner lines for older periods
+                
+                // Generate period label
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthName = monthNames[periodData.month];
+                const halfLabel = periodData.isFirstHalf ? '1st' : '2nd';
+                const label = `${monthName} ${periodData.year} (${halfLabel} half)`;
+                
+                datasets.push({
+                    label: label,
+                    data: periodData.deltaData,
+                    borderColor: `rgba(108, 117, 125, ${opacity})`, // Gray with varying opacity
+                    backgroundColor: 'transparent',
+                    tension: 0.1,
+                    borderWidth: lineWidth,
+                    pointRadius: 0, // No points for historical data
+                    pointHoverRadius: 0,
+                    spanGaps: true,
+                    order: 10 + periodIndex, // Higher order number = rendered behind
+                    fill: false
+                });
+            });
+        }
+        
+        // Add current period dataset (on top) - only if we have data
+        if (hasCurrentData) {
+            datasets.push({
+                label: 'Delta Budget (Spent) per Day',
+                data: chartData.currentPeriodData,
+                borderColor: '#dc3545',
+                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                pointRadius: 5,
+                pointHoverRadius: 8,
+                tension: 0.2,
+                borderWidth: 3,
+                pointBackgroundColor: '#dc3545',
+                fill: false,
+                order: 1 // Rendered on top
+            });
+        }
+        
+        // If no meaningful data, show a placeholder message
+        if (!hasCurrentData) {
+            datasets.push({
+                label: 'No budget change data for current period',
+                data: [], // Empty data
+                borderColor: '#6c757d',
+                backgroundColor: 'transparent',
+                tension: 0.1,
+                pointRadius: 0,
+                showLine: false,
+                order: 1
+            });
+        }
+        
+        this.charts.deltaBudgetPerDay = new ChartConstructor(ctx, {
+            type: 'line',
+            data: {
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e9ecef',
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const sign = value >= 0 ? '+' : '';
+                                return `${context.dataset.label}: ${sign}${Math.round(value * 100) / 100} RON`;
+                            },
+                            title: function(tooltipItems) {
+                                const date = new Date(tooltipItems[0].parsed.x);
+                                return date.toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                });
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            displayFormats: {
+                                day: 'MMM dd'
+                            }
+                        },
+                        ticks: {
+                            color: function(context) {
+                                // Color weekend days differently
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            }
+                        },
+                        grid: {
+                            color: function(context) {
+                                // Different grid color for weekend days
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Date',
+                            color: '#e9ecef'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#e9ecef',
+                            callback: function(value) {
+                                const sign = value >= 0 ? '+' : '';
+                                return sign + Math.round(value * 100) / 100 + ' RON';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.2)'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Budget Change (RON)',
+                            color: '#e9ecef'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
      * Prepare budget per day projected vs actual chart data
      * @private
      * @returns {Object} Chart data
@@ -828,6 +1009,169 @@ class ChartService {
                 transformedData.push({
                     x: currentDate.getTime(),
                     y: data.budgetPerDay
+                });
+            }
+        });
+        
+        return transformedData;
+    }
+
+    /**
+     * Prepare delta budget (spent) per day chart data
+     * @private
+     * @returns {Object} Chart data including current period and previous periods
+     */
+    _prepareDeltaBudgetPerDayData() {
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        // Get proper period dates
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        
+        // Parse start and end dates
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        
+        // Filter budget history to current period
+        const currentPeriodBudgetHistory = budgetHistory.filter(entry => {
+            const entryDate = new Date(entry.timestamp);
+            entryDate.setHours(0, 0, 0, 0);
+            
+            const periodStartNorm = new Date(periodStart);
+            periodStartNorm.setHours(0, 0, 0, 0);
+            
+            const periodEndNorm = new Date(periodEnd);
+            periodEndNorm.setHours(23, 59, 59, 999);
+            
+            return entryDate >= periodStartNorm && entryDate <= periodEndNorm;
+        });
+        
+        // Sort by timestamp to ensure chronological order
+        currentPeriodBudgetHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate delta (spending/changes) between consecutive transactions
+        const currentPeriodData = [];
+        
+        for (let i = 1; i < currentPeriodBudgetHistory.length; i++) {
+            const currentEntry = currentPeriodBudgetHistory[i];
+            const previousEntry = currentPeriodBudgetHistory[i - 1];
+            
+            const delta = currentEntry.amount - previousEntry.amount;
+            const entryDate = new Date(currentEntry.timestamp);
+            
+            // Only add meaningful deltas (not zero changes)
+            if (delta !== 0) {
+                currentPeriodData.push({
+                    x: entryDate.getTime(),
+                    y: delta,
+                    previousAmount: previousEntry.amount,
+                    currentAmount: currentEntry.amount,
+                    action: currentEntry.action
+                });
+            }
+        }
+        
+        // Get previous periods data for comparison
+        let previousPeriodsData = [];
+        if (currentPeriodData.length > 0) {
+            const previousPeriods = this._getPreviousPeriodsData(3);
+            
+            // Calculate delta data for previous periods
+            const currentPeriodInfo = { periodStart, periodEnd };
+            
+            previousPeriods.forEach(prevPeriod => {
+                const previousPeriodDeltaData = this._calculatePreviousPeriodDelta(prevPeriod, currentPeriodInfo);
+                if (previousPeriodDeltaData.length > 0) {
+                    previousPeriodsData.push({
+                        deltaData: previousPeriodDeltaData,
+                        periodIndex: prevPeriod.periodIndex,
+                        month: prevPeriod.month,
+                        year: prevPeriod.year,
+                        isFirstHalf: prevPeriod.isFirstHalf
+                    });
+                }
+            });
+        }
+        
+        console.log('Delta Budget Per Day Chart Data:', {
+            periodStart: periodStart.toLocaleDateString(),
+            periodEnd: periodEnd.toLocaleDateString(),
+            currentPeriodTransactions: currentPeriodBudgetHistory.length,
+            currentPeriodDeltas: currentPeriodData.length,
+            previousPeriods: previousPeriodsData.length,
+            deltaValues: currentPeriodData.map(d => ({ 
+                date: new Date(d.x).toLocaleDateString(), 
+                delta: d.y, 
+                action: d.action 
+            }))
+        });
+        
+        return {
+            currentPeriodData,
+            previousPeriodsData
+        };
+    }
+
+    /**
+     * Calculate delta budget data for a previous period and map to current timeline
+     * @private
+     * @param {Object} previousPeriod - Previous period data
+     * @param {Object} currentPeriod - Current period data
+     * @returns {Array} Delta budget data points mapped to current timeline
+     */
+    _calculatePreviousPeriodDelta(previousPeriod, currentPeriod) {
+        const { budgetHistory, periodStart: prevStart, periodEnd: prevEnd } = previousPeriod;
+        const { periodStart: currStart, periodEnd: currEnd } = currentPeriod;
+        
+        // Calculate period lengths
+        const prevPeriodDays = Math.ceil((prevEnd - prevStart) / (1000 * 60 * 60 * 24));
+        const currPeriodDays = Math.ceil((currEnd - currStart) / (1000 * 60 * 60 * 24));
+        
+        // Sort budget history chronologically
+        const sortedHistory = budgetHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate deltas for previous period
+        const prevDeltaData = [];
+        
+        for (let i = 1; i < sortedHistory.length; i++) {
+            const currentEntry = sortedHistory[i];
+            const previousEntry = sortedHistory[i - 1];
+            
+            const delta = currentEntry.amount - previousEntry.amount;
+            
+            if (delta !== 0) {
+                const entryDate = new Date(currentEntry.timestamp);
+                const dayIndex = Math.floor((entryDate - prevStart) / (1000 * 60 * 60 * 24));
+                
+                if (dayIndex >= 0 && dayIndex <= prevPeriodDays) {
+                    prevDeltaData.push({
+                        dayIndex: dayIndex,
+                        delta: delta,
+                        timestamp: entryDate.getTime()
+                    });
+                }
+            }
+        }
+        
+        // Transform to current period timeline
+        const transformedData = [];
+        
+        prevDeltaData.forEach(data => {
+            // Map previous period day to current period timeline
+            const progress = data.dayIndex / prevPeriodDays; // 0 to 1
+            const currentDayIndex = Math.floor(progress * currPeriodDays);
+            
+            // Calculate the corresponding date in current period
+            const currentDate = new Date(currStart);
+            currentDate.setDate(currStart.getDate() + currentDayIndex);
+            
+            // Only include if it's not in the future
+            if (currentDate <= new Date()) {
+                transformedData.push({
+                    x: currentDate.getTime(),
+                    y: data.delta
                 });
             }
         });
@@ -1493,6 +1837,11 @@ class ChartService {
         if (this.charts.budgetPerDayProjectedVsActual) {
             // For budget per day projected vs actual chart, it's easier to destroy and recreate due to dynamic datasets
             this.renderBudgetPerDayProjectedVsActualChart();
+        }
+
+        if (this.charts.deltaBudgetPerDay) {
+            // For delta budget chart, it's easier to destroy and recreate due to dynamic datasets
+            this.renderDeltaBudgetPerDayChart();
         }
     }
 
