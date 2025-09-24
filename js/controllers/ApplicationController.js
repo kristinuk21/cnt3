@@ -80,6 +80,12 @@ class ApplicationController {
             this.services.database,
             this.services.dateCalculation
         );
+        
+        // Initialize history chart service (depends on database and dateCalculation)
+        this.services.chistory = new CHistoryService(
+            this.services.database,
+            this.services.dateCalculation
+        );
 
         // Inject dependencies
         this.services.ui.setNotificationService(this.services.notification);
@@ -107,7 +113,8 @@ class ApplicationController {
             this.services.dateCalculation,
             this.services.database,
             this.services.progressCalculation,
-            this.services.chart
+            this.services.chart,
+            this.services.chistory
         );
 
         this.controllers.button = new ButtonController(

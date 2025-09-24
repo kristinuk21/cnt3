@@ -48,7 +48,7 @@ class BudgetController {
             this.databaseService.setBudget(amount, 'manual_set');
             this.uiService.showAlert(`Budget set to ${amount} RON`, 'success');
             this._refreshBudgetModal();
-            this._updateCharts();
+            this._updateCharts(); // Update CharTs on budget change
         }
     }
 
@@ -61,7 +61,7 @@ class BudgetController {
         const newBudget = this.databaseService.adjustBudget(adjustment, action);
         this.uiService.showAlert(`Budget ${action}d to ${newBudget} RON`, 'success');
         this._refreshBudgetModal();
-        this._updateCharts();
+        this._updateCharts(); // Update CharTs
     }
 
     /**
@@ -78,17 +78,26 @@ class BudgetController {
     }
 
     /**
-     * Update charts when budget changes
+     * Update CharTs (trend data) when budget changes
      * @private
      */
     _updateCharts() {
-        // Update charts if they exist and are initialized
+        // Update CharTs if they exist and are initialized
         const app = window.applicationController || window.app;
         if (app && app.services && app.services.chart) {
             try {
                 app.services.chart.updateCharts();
             } catch (error) {
-                console.error('Error updating charts after budget change:', error);
+                console.error('Error updating CharTs after budget change:', error);
+            }
+        }
+        
+        // Update CHarts (history) if they exist and are initialized
+        if (app && app.services && app.services.chistory) {
+            try {
+                app.services.chistory.updateCharts();
+            } catch (error) {
+                console.error('Error updating CHarts after budget change:', error);
             }
         }
     }

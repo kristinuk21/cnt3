@@ -62,7 +62,11 @@ class EventService {
         // Specific tab events
         const detailsTab = document.getElementById('details-tab');
         const logsTab = document.getElementById('logs-tab');
+        // CharTs tab (trend data focus)
         const chartsTab = document.getElementById('charts-tab');
+        
+        // CHarts tab (history data focus)
+        const chartsHistoryTab = document.getElementById('charts-history-tab');
 
         if (detailsTab) {
             this._addEventListener(detailsTab, 'shown.bs.tab', () => {
@@ -78,7 +82,13 @@ class EventService {
 
         if (chartsTab) {
             this._addEventListener(chartsTab, 'shown.bs.tab', () => {
-                tabController.handleChartsTabShown();
+                tabController.handleChartsTabShown(); // Handle CharTs tab shown
+            });
+        }
+        
+        if (chartsHistoryTab) {
+            this._addEventListener(chartsHistoryTab, 'shown.bs.tab', () => {
+                tabController.handleChartsHistoryTabShown(); // Handle CHarts tab shown
             });
         }
     }

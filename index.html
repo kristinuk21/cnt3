@@ -28,7 +28,10 @@
                                 <button class="nav-link rounded-pill" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button" role="tab" aria-controls="logs" aria-selected="false">Logs</button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link rounded-pill" id="charts-tab" data-bs-toggle="tab" data-bs-target="#charts" type="button" role="tab" aria-controls="charts" aria-selected="false">Charts</button>
+                                <button class="nav-link rounded-pill" id="charts-tab" data-bs-toggle="tab" data-bs-target="#charts" type="button" role="tab" aria-controls="charts" aria-selected="false">CharTs</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link rounded-pill" id="charts-history-tab" data-bs-toggle="tab" data-bs-target="#charts-history" type="button" role="tab" aria-controls="charts-history" aria-selected="false">CHarts</button>
                             </li>
                         </ul>
                         <div class="tab-content" id="myTabContent">
@@ -123,7 +126,7 @@
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Budget Burndown</h5>
+                                                <h5 class="mb-0">Budget Burndown (Trend Data)</h5>
                                             </div>
                                             <div class="card-body">
                                                 <canvas id="budgetChart" width="400" height="200"></canvas>
@@ -167,6 +170,50 @@
                                             </div>
                                             <div class="card-body">
                                                 <canvas id="trendsChart" width="400" height="200"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="charts-history" role="tabpanel" aria-labelledby="charts-history-tab">
+                                <div class="row">
+                                    <div class="col-12 mb-4">
+                                        <div class="card bg-dark text-light border-secondary">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Historical Budget Comparison (History Data)</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="historicalBudgetChart" width="400" height="200"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 mb-4">
+                                        <div class="card bg-dark text-light border-secondary">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Period Spending Patterns</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="spendingPatternsChart" width="400" height="250"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 mb-4">
+                                        <div class="card bg-dark text-light border-secondary">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Long-Term Trends</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="longTermTrendsChart" width="400" height="250"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 mb-4">
+                                        <div class="card bg-dark text-light border-secondary">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Budget Efficiency History</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="budgetEfficiencyChart" width="400" height="250"></canvas>
                                             </div>
                                         </div>
                                     </div>
@@ -258,6 +305,7 @@
     <script src="js/services/UIService.js?v=20250829"></script>
     <script src="js/services/EventService.js?v=20250829"></script>
     <script src="js/services/ChartService.js?v=20250829"></script>
+    <script src="js/services/CHistoryService.js?v=20250829"></script>
     
     <!-- React Components -->
     <script type="text/babel" data-presets="react" src="js/components/HomeProgressBar.jsx?v=20250829"></script>

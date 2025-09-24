@@ -1,6 +1,7 @@
 /**
- * ChartService - Handles chart rendering and data visualization
- * Follows Single Responsibility Principle - only responsible for chart operations
+ * ChartService (CharTs) - Handles chart rendering and data visualization for trend data
+ * Focuses on trend analysis: budget burndowns, spending patterns, and temporal analysis
+ * Follows Single Responsibility Principle - only responsible for trend chart operations
  */
 class ChartService {
     constructor(databaseService, dateCalculationService) {
@@ -10,7 +11,7 @@ class ChartService {
     }
 
     /**
-     * Initialize all charts when the charts tab is shown
+     * Initialize all CharTs (trend charts) when the CharTs tab is shown
      */
     initializeCharts() {
         this.renderBudgetChart();

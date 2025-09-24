@@ -3,12 +3,13 @@
  * Follows Single Responsibility Principle - only responsible for tab management
  */
 class TabController {
-    constructor(uiService, dateCalculationService, databaseService, progressCalculationService, chartService) {
+    constructor(uiService, dateCalculationService, databaseService, progressCalculationService, chartService, chistoryService) {
         this.uiService = uiService;
         this.dateCalculationService = dateCalculationService;
         this.databaseService = databaseService;
         this.progressCalculationService = progressCalculationService;
         this.chartService = chartService;
+        this.chistoryService = chistoryService;
     }
 
     /**
@@ -170,14 +171,21 @@ class TabController {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        alert(`Debug analysis complete!\n\n${discrepancyAnalysis}\n\nCheck browser console for detailed analysis and download the JSON file for complete data.\n\nKey insight: Logs show TOTAL budget amounts, while charts typically show DAILY calculations (total ÷ days).`);
+        alert(`Debug analysis complete!\n\n${discrepancyAnalysis}\n\nCheck browser console for detailed analysis and download the JSON file for complete data.\n\nKey insight: Logs show TOTAL budget amounts, while CharTs typically show DAILY calculations (total ÷ days) for trend analysis.`);
     }
 
     /**
-     * Handle charts tab shown event
+     * Handle CharTs (trend data) tab shown event
      */
     handleChartsTabShown() {
-        this.chartService.initializeCharts();
+        this.chartService.initializeCharts(); // Initialize CharTs (trend data)
+    }
+    
+    /**
+     * Handle CHarts (history data) tab shown event
+     */
+    handleChartsHistoryTabShown() {
+        this.chistoryService.initializeCharts(); // Initialize CHarts (history data)
     }
 
     /**

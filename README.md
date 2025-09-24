@@ -178,6 +178,8 @@ cnt3/- **HomeProgressBar**: Overall progress visualization
 - **UIService**: UI updates, rendering, and DOM manipulation
 - **NotificationService**: User notifications and feedback
 - **EventService**: Application event handling and coordination
+- **ChartService**: Trend chart rendering and real-time data visualization
+- **CHistoryService**: Historical chart rendering and long-term pattern analysis
 - **UtilsService**: Utility functions and common operations
 
 #### UI Components (React)
@@ -204,6 +206,38 @@ cnt3/- **HomeProgressBar**: Overall progress visualization
 - **Persistent Data**: Early starts, breaks, and logs stored locally
 - **Data Reset**: Option to clear today's data or all logs
 
+## 📊 Charts System
+
+The application features a dual chart system providing comprehensive data analysis:
+
+### CharTs (Trend Data)
+- **Focus**: Real-time trend analysis and current period insights
+- **Charts Available**:
+  - Budget Burndown: Track remaining budget over time
+  - Daily Trends: Visualize work start times and page reloads  
+  - Budget Per Day Trends: Monitor daily spending patterns with smoothing
+  - Projected vs Actual: Compare planned vs actual budget usage
+  - Delta Budget: Track daily spending changes
+- **Purpose**: Monitor current progress and identify short-term patterns
+- **Service**: `ChartService.js`
+
+### CHarts (History Data)
+- **Focus**: Historical analysis and long-term pattern recognition
+- **Charts Available**:
+  - Historical Budget Comparison: Compare budget metrics across periods
+  - Period Spending Patterns: Analyze spending behavior over multiple periods
+  - Long-Term Trends: Track average daily spending and budget utilization
+  - Budget Efficiency History: Visualize budget utilization distribution
+- **Purpose**: Understand historical performance and long-term trends
+- **Service**: `CHistoryService.js`
+
+### Chart Features
+- **Automatic Updates**: Both chart systems update when budget changes occur
+- **Interactive Elements**: Hover tooltips, responsive design, and color coding
+- **Historical Comparison**: Previous periods shown as background data
+- **Weekend Highlighting**: Different colors for weekend days
+- **Responsive Design**: Charts adapt to different screen sizes
+
 ## 🔄 Usage
 
 1. **Starting Work**
@@ -221,7 +255,13 @@ cnt3/- **HomeProgressBar**: Overall progress visualization
    - **Today Progress**: Shows daily work progress with time remaining
    - Click progress bars to see detailed modal information
 
-4. **Activity Logs**
+4. **Viewing Charts**
+   - **CharTs Tab**: View current period trends and real-time data
+   - **CHarts Tab**: Analyze historical patterns and long-term trends
+   - Charts automatically update when budget changes
+   - Hover over data points for detailed information
+
+5. **Activity Logs**
    - View all actions in the "Logs" tab
    - See break history, early starts, and other activities
    - Reset logs when needed
