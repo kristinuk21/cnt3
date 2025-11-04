@@ -14,15 +14,820 @@ class ChartService {
      * Initialize all CharTs (trend charts) when the CharTs tab is shown
      */
     initializeCharts() {
-        this.renderBudgetChart();
-        this.renderTrendsChart();
-        this.renderBudgetPerDayTrendsChart();
-        this.renderBudgetPerDayProjectedVsActualChart();
-        this.renderDeltaBudgetPerDayChart();
+        this.renderBudgetHealthDashboard();
+        this.renderSpendingVelocity();
+        this.renderDailyActivityTimeline();
     }
 
     /**
-     * Render budget burndown chart
+     * Render Budget Health Dashboard - Comprehensive budget status at a glance
+     * Shows: Current budget, daily burn rate, days remaining, and pace indicators
+     */
+    renderBudgetHealthDashboard() {
+        const ctx = document.getElementById('budgetHealthChart');
+        if (!ctx) return;
+
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
+        if (this.charts.budgetHealth) {
+            this.charts.budgetHealth.destroy();
+        }
+
+        const healthData = this._prepareBudgetHealthData();
+        
+        this.charts.budgetHealth = new ChartConstructor(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Budget Status', 'Daily Burn', 'Pace Check'],
+                datasets: [{
+                    label: 'Current',
+                    data: [healthData.budgetPercent, healthData.burnRate, healthData.paceScore],
+                    backgroundColor: [
+                        healthData.budgetColor,
+                        healthData.burnColor,
+                        healthData.paceColor
+                    ],
+                    borderColor: [
+                        healthData.budgetColor.replace('0.7', '1'),
+                        healthData.burnColor.replace('0.7', '1'),
+                        healthData.paceColor.replace('0.7', '1')
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const index = context.dataIndex;
+                                if (index === 0) {
+                                    return `Budget Remaining: ${Math.round(healthData.currentBudget)} RON (${Math.round(context.parsed.x)}%)`;
+                                } else if (index === 1) {
+                                    return `Daily Burn Rate: ${Math.round(healthData.actualBurnRate)} RON/day (Target: ${Math.round(healthData.targetBurnRate)})`;
+                                } else {
+                                    return `Pace: ${healthData.paceStatus} (${Math.round(context.parsed.x)} score)`;
+                                }
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: [healthData.statusMessage, ...healthData.actions],
+                        color: '#e9ecef',
+                        font: {
+                            size: 13,
+                            weight: 'bold'
+                        },
+                        padding: {
+                            bottom: 15
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            dangerZone: {
+                                type: 'box',
+                                xMin: 0,
+                                xMax: 70,
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                borderWidth: 0
+                            },
+                            warningZone: {
+                                type: 'box',
+                                xMin: 70,
+                                xMax: 90,
+                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                borderWidth: 0
+                            },
+                            safeZone: {
+                                type: 'box',
+                                xMin: 90,
+                                xMax: 100,
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                borderWidth: 0
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            color: '#e9ecef',
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.2)'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#e9ecef',
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Render Spending Velocity - Visual representation of spending pace over time
+     * Shows actual spending trajectory vs ideal linear spending
+     */
+    renderSpendingVelocity() {
+        const ctx = document.getElementById('spendingVelocityChart');
+        if (!ctx) return;
+
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
+        if (this.charts.spendingVelocity) {
+            this.charts.spendingVelocity.destroy();
+        }
+
+        const velocityData = this._prepareSpendingVelocityData();
+        
+        this.charts.spendingVelocity = new ChartConstructor(ctx, {
+            type: 'line',
+            data: {
+                labels: velocityData.labels,
+                datasets: [
+                    {
+                        label: 'Ideal Linear Spending',
+                        data: velocityData.idealSpending,
+                        borderColor: 'rgba(108, 117, 125, 0.5)',
+                        backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0,
+                        fill: true
+                    },
+                    {
+                        label: 'Actual Spending',
+                        data: velocityData.actualSpending,
+                        borderColor: velocityData.isOnTrack ? '#28a745' : '#dc3545',
+                        backgroundColor: velocityData.isOnTrack ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: velocityData.isOnTrack ? '#28a745' : '#dc3545',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e9ecef',
+                            usePointStyle: true,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${Math.round(context.parsed.y)} RON spent`;
+                            },
+                            footer: function(tooltipItems) {
+                                const day = tooltipItems[0].label;
+                                const actual = tooltipItems.find(item => item.dataset.label === 'Actual Spending')?.parsed.y || 0;
+                                const ideal = tooltipItems.find(item => item.dataset.label === 'Ideal Linear Spending')?.parsed.y || 0;
+                                const diff = actual - ideal;
+                                const status = diff > 0 ? 'overspent' : 'under budget';
+                                return `${Math.abs(Math.round(diff))} RON ${status}`;
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: velocityData.actions,
+                        color: velocityData.isOnTrack ? '#28a745' : '#dc3545',
+                        font: {
+                            size: 12,
+                            weight: 'bold'
+                        },
+                        padding: {
+                            bottom: 20
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: function(context) {
+                                const label = context.tick.label;
+                                const dayMatch = label.match(/Day (\d+)/);
+                                if (!dayMatch) return '#e9ecef';
+                                
+                                const dayNum = parseInt(dayMatch[1]);
+                                const date = new Date(velocityData.periodStart);
+                                date.setDate(date.getDate() + dayNum - 1);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            },
+                            maxRotation: 45,
+                            minRotation: 0
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.1)'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#e9ecef',
+                            callback: function(value) {
+                                return Math.round(value) + ' RON';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.2)'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Cumulative Spending',
+                            color: '#e9ecef'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Render Daily Activity Timeline - Shows work patterns and significant events
+     */
+    renderDailyActivityTimeline() {
+        const ctx = document.getElementById('dailyActivityChart');
+        if (!ctx) return;
+
+        const ChartConstructor = window.Chart || Chart;
+        if (!ChartConstructor) {
+            console.error('Chart.js is not loaded properly');
+            return;
+        }
+
+        if (this.charts.dailyActivity) {
+            this.charts.dailyActivity.destroy();
+        }
+
+        const activityData = this._prepareDailyActivityData();
+        
+        this.charts.dailyActivity = new ChartConstructor(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: 'Work Start Times',
+                        data: activityData.startTimes,
+                        backgroundColor: '#ffc107',
+                        borderColor: '#ffc107',
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        pointStyle: 'circle'
+                    },
+                    {
+                        label: 'Budget Changes',
+                        data: activityData.budgetEvents,
+                        backgroundColor: '#17a2b8',
+                        borderColor: '#17a2b8',
+                        pointRadius: 7,
+                        pointHoverRadius: 9,
+                        pointStyle: 'rectRot'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: activityData.insights,
+                        color: '#e9ecef',
+                        font: {
+                            size: 12
+                        },
+                        padding: {
+                            bottom: 15
+                        }
+                    },
+                    legend: {
+                        labels: {
+                            color: '#e9ecef',
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const hours = Math.floor(context.parsed.y / 60);
+                                const minutes = context.parsed.y % 60;
+                                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                                
+                                if (context.datasetIndex === 0) {
+                                    return `Started at: ${timeStr}`;
+                                } else {
+                                    return `Budget event at: ${timeStr}`;
+                                }
+                            },
+                            title: function(tooltipItems) {
+                                const date = new Date(tooltipItems[0].parsed.x);
+                                return date.toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                });
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            displayFormats: {
+                                day: 'MMM dd'
+                            }
+                        },
+                        ticks: {
+                            color: function(context) {
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
+                            }
+                        },
+                        grid: {
+                            color: function(context) {
+                                const timestamp = context.tick.value;
+                                const date = new Date(timestamp);
+                                const dayOfWeek = date.getDay();
+                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.2)' : 'rgba(233, 236, 239, 0.1)';
+                            }
+                        }
+                    },
+                    y: {
+                        min: 6 * 60,
+                        max: 20 * 60,
+                        ticks: {
+                            color: '#e9ecef',
+                            callback: function(value) {
+                                const hours = Math.floor(value / 60);
+                                const minutes = value % 60;
+                                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                            },
+                            stepSize: 120
+                        },
+                        grid: {
+                            color: 'rgba(233, 236, 239, 0.2)'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Time of Day',
+                            color: '#e9ecef'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Filter outliers from data using IQR method
+     * @private
+     */
+    _filterOutliers(data) {
+        if (data.length < 4) return data;
+        
+        const sorted = [...data].sort((a, b) => a - b);
+        const q1Index = Math.floor(sorted.length * 0.25);
+        const q3Index = Math.floor(sorted.length * 0.75);
+        const q1 = sorted[q1Index];
+        const q3 = sorted[q3Index];
+        const iqr = q3 - q1;
+        const lowerBound = q1 - (1.5 * iqr);
+        const upperBound = q3 + (1.5 * iqr);
+        
+        return data.filter(value => value >= lowerBound && value <= upperBound);
+    }
+
+    /**
+     * Get action recommendation based on budget health
+     * @private
+     */
+    _getActionRecommendation(paceScore, burnRatePercent, budgetPercent, remainingDays) {
+        const actions = [];
+        
+        if (paceScore > 130) {
+            actions.push('✓ EXCELLENT: Well under budget');
+            actions.push('Safe to maintain or slightly increase spending');
+        } else if (paceScore > 110) {
+            actions.push('✓ GOOD: You have budget flexibility');
+            actions.push('Current pace is working well');
+        } else if (paceScore < 70) {
+            actions.push('🚨 URGENT: Reduce spending immediately');
+            if (remainingDays > 3) {
+                const dailyTarget = (budgetPercent / remainingDays);
+                actions.push(`Target: Max ${Math.round(dailyTarget * remainingDays)} RON total remaining`);
+            } else {
+                actions.push('Consider emergency budget review');
+            }
+        } else if (paceScore < 90) {
+            actions.push('⚠️ ACTION: Review spending patterns');
+            actions.push('Look for non-essential expenses to cut');
+        } else {
+            actions.push('✓ MAINTAIN: Current pace is good');
+            actions.push('Continue with current spending habits');
+        }
+        
+        return actions;
+    }
+
+    /**
+     * Prepare budget health dashboard data
+     * @private
+     */
+    _prepareBudgetHealthData() {
+        const currentBudget = this.databaseService.getCurrentBudget();
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        const remainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
+        
+        // Get period info
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        
+        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
+        const daysElapsed = totalDays - remainingDays;
+        
+        // Calculate starting budget
+        const currentPeriodHistory = budgetHistory.filter(entry => {
+            const entryDate = new Date(entry.timestamp);
+            return entryDate >= periodStart && entryDate <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        const startingBudget = currentPeriodHistory.length > 0 ? currentPeriodHistory[0].amount : currentBudget;
+        const totalSpent = startingBudget - currentBudget;
+        
+        // Budget percentage
+        const budgetPercent = (currentBudget / startingBudget) * 100;
+        
+        // Burn rate calculations
+        const actualBurnRate = daysElapsed > 0 ? totalSpent / daysElapsed : 0;
+        const targetBurnRate = startingBudget / totalDays;
+        const burnRatePercent = targetBurnRate > 0 ? (actualBurnRate / targetBurnRate) * 100 : 0;
+        
+        // Pace calculation (percentage of budget that should be remaining)
+        const idealRemainingPercent = (remainingDays / totalDays) * 100;
+        const paceScore = idealRemainingPercent > 0 ? (budgetPercent / idealRemainingPercent) * 100 : 100;
+        
+        // Status messages
+        let statusMessage = '';
+        let paceStatus = '';
+        
+        if (paceScore < 70) {
+            statusMessage = '✗ Critical! Spending way too fast';
+            paceStatus = 'Critical';
+        } else if (paceScore < 90) {
+            statusMessage = '⚠ Warning: Over budget pace';
+            paceStatus = 'Over Pace';
+        } else if (paceScore < 110) {
+            statusMessage = '✓ Good! On track with budget';
+            paceStatus = 'On Track';
+        } else {
+            statusMessage = '✓ Excellent! Under budget';
+            paceStatus = 'Ahead';
+        }
+        
+        // Colors based on performance
+        const getBudgetColor = () => {
+            if (budgetPercent > 50) return 'rgba(40, 167, 69, 0.7)';
+            if (budgetPercent > 25) return 'rgba(255, 193, 7, 0.7)';
+            return 'rgba(220, 53, 69, 0.7)';
+        };
+        
+        const getBurnColor = () => {
+            if (burnRatePercent < 90) return 'rgba(40, 167, 69, 0.7)';
+            if (burnRatePercent < 110) return 'rgba(255, 193, 7, 0.7)';
+            return 'rgba(220, 53, 69, 0.7)';
+        };
+        
+        const getPaceColor = () => {
+            if (paceScore < 70) return 'rgba(220, 53, 69, 0.7)';
+            if (paceScore < 90) return 'rgba(255, 193, 7, 0.7)';
+            return 'rgba(40, 167, 69, 0.7)';
+        };
+        
+        const actions = this._getActionRecommendation(paceScore, burnRatePercent, budgetPercent, remainingDays);
+        
+        return {
+            currentBudget,
+            budgetPercent: Math.min(100, budgetPercent),
+            burnRate: Math.min(100, burnRatePercent),
+            paceScore: Math.min(100, paceScore),
+            actualBurnRate,
+            targetBurnRate,
+            statusMessage,
+            paceStatus,
+            budgetColor: getBudgetColor(),
+            burnColor: getBurnColor(),
+            paceColor: getPaceColor(),
+            actions,
+            remainingDays
+        };
+    }
+
+    /**
+     * Get spending velocity action recommendation
+     * @private
+     */
+    _getVelocityAction(overspendPercent, daysRemaining, currentBudget) {
+        if (overspendPercent > 20) {
+            const dailyMax = Math.round(currentBudget / daysRemaining);
+            return [
+                '🚨 CRITICAL: Spending too fast',
+                `Action: Limit to ${dailyMax} RON/day maximum`,
+                'Review all non-essential expenses now'
+            ];
+        } else if (overspendPercent > 10) {
+            const dailyTarget = Math.round(currentBudget / daysRemaining * 0.9);
+            return [
+                '⚠️ WARNING: Above ideal pace',
+                `Action: Target ${dailyTarget} RON/day or less`,
+                'Start cutting discretionary spending'
+            ];
+        } else if (overspendPercent < -10) {
+            return [
+                '✓ EXCELLENT: Well under budget',
+                'Action: Current approach is working',
+                'Safe to maintain or slightly increase spending'
+            ];
+        } else {
+            return [
+                '✓ ON TRACK: Spending aligned with plan',
+                'Action: Continue current spending habits',
+                'No changes needed at this time'
+            ];
+        }
+    }
+
+    /**
+     * Prepare spending velocity data
+     * @private
+     */
+    _prepareSpendingVelocityData() {
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        // Get period info
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        const now = new Date();
+        
+        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
+        const currentDayIndex = Math.floor((now - periodStart) / (1000 * 60 * 60 * 24));
+        
+        // Get current period history
+        const currentPeriodHistory = budgetHistory.filter(entry => {
+            const entryDate = new Date(entry.timestamp);
+            return entryDate >= periodStart && entryDate <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        if (currentPeriodHistory.length === 0) {
+            return {
+                labels: ['Day 1'],
+                idealSpending: [0],
+                actualSpending: [0],
+                isOnTrack: true,
+                velocityMessage: 'No spending data available',
+                periodStart
+            };
+        }
+        
+        const startingBudget = currentPeriodHistory[0].amount;
+        const currentBudgetAmount = this.databaseService.getCurrentBudget();
+        const totalSpent = startingBudget - currentBudgetAmount;
+        
+        // Calculate ideal linear spending
+        const labels = [];
+        const idealSpending = [];
+        const actualSpending = [];
+        
+        const dailyIdealSpend = startingBudget / totalDays;
+        
+        // Build data arrays
+        for (let i = 0; i <= Math.min(currentDayIndex, totalDays); i++) {
+            labels.push(`Day ${i + 1}`);
+            idealSpending.push(dailyIdealSpend * (i + 1));
+            
+            // Find actual spending up to this day
+            const date = new Date(periodStart);
+            date.setDate(periodStart.getDate() + i);
+            date.setHours(23, 59, 59, 999);
+            
+            const historyUpToDay = currentPeriodHistory.filter(entry => 
+                new Date(entry.timestamp) <= date
+            );
+            
+            if (historyUpToDay.length > 0) {
+                const budgetAtDay = historyUpToDay[historyUpToDay.length - 1].amount;
+                actualSpending.push(startingBudget - budgetAtDay);
+            } else {
+                actualSpending.push(0);
+            }
+        }
+        
+        // Filter outliers from actual spending data
+        const spendingDeltas = [];
+        for (let i = 1; i < actualSpending.length; i++) {
+            spendingDeltas.push(actualSpending[i] - actualSpending[i - 1]);
+        }
+        const filteredDeltas = this._filterOutliers(spendingDeltas);
+        const avgDelta = filteredDeltas.length > 0 ? 
+            filteredDeltas.reduce((a, b) => a + b, 0) / filteredDeltas.length : 0;
+        
+        // Smooth outliers in actual spending
+        for (let i = 1; i < actualSpending.length; i++) {
+            const delta = actualSpending[i] - actualSpending[i - 1];
+            if (delta > avgDelta * 3) { // Outlier detection
+                actualSpending[i] = actualSpending[i - 1] + avgDelta;
+            }
+        }
+        
+        // Determine if on track
+        const currentIdealSpending = dailyIdealSpend * (currentDayIndex + 1);
+        const isOnTrack = totalSpent <= currentIdealSpending * 1.1; // 10% tolerance
+        
+        const overspendPercent = ((totalSpent / currentIdealSpending) - 1) * 100;
+        const remainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
+        const remainingBudget = this.databaseService.getCurrentBudget();
+        
+        const actions = this._getVelocityAction(overspendPercent, remainingDays, remainingBudget);
+        let velocityMessage = actions[0]; // First line is the status
+        
+        return {
+            labels,
+            idealSpending,
+            actualSpending,
+            isOnTrack,
+            velocityMessage,
+            periodStart,
+            actions,
+            overspendPercent
+        };
+    }
+
+    /**
+     * Get activity pattern insights
+     * @private
+     */
+    _getActivityInsights(startTimes, budgetEvents) {
+        if (startTimes.length === 0 && budgetEvents.length === 0) {
+            return ['No activity data available yet'];
+        }
+        
+        const insights = [];
+        
+        // Analyze start times
+        if (startTimes.length > 0) {
+            const avgStartMinutes = startTimes.reduce((sum, item) => sum + item.y, 0) / startTimes.length;
+            const avgHour = Math.floor(avgStartMinutes / 60);
+            const avgMin = Math.floor(avgStartMinutes % 60);
+            
+            if (avgStartMinutes < 540) { // Before 9 AM
+                insights.push(`✓ Great! Average start: ${avgHour}:${avgMin.toString().padStart(2, '0')}`);
+                insights.push('Early starts give you more productive time');
+            } else if (avgStartMinutes > 660) { // After 11 AM
+                insights.push(`⚠️ Late starts: Average ${avgHour}:${avgMin.toString().padStart(2, '0')}`);
+                insights.push('Try starting earlier for better time management');
+            } else {
+                insights.push(`✓ Consistent starts: ~${avgHour}:${avgMin.toString().padStart(2, '0')}`);
+            }
+        }
+        
+        // Analyze budget events
+        if (budgetEvents.length > 3) {
+            const eventTimes = budgetEvents.map(e => e.y);
+            const avgEventTime = eventTimes.reduce((a, b) => a + b, 0) / eventTimes.length;
+            const eventHour = Math.floor(avgEventTime / 60);
+            
+            if (eventHour < 12) {
+                insights.push('Budget changes cluster in morning hours');
+            } else if (eventHour < 17) {
+                insights.push('Budget changes cluster in afternoon');
+            } else {
+                insights.push('Budget changes often happen in evening');
+            }
+        }
+        
+        return insights;
+    }
+
+    /**
+     * Prepare daily activity timeline data
+     * @private
+     */
+    _prepareDailyActivityData() {
+        const logs = this.databaseService.getLogs();
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        const startTimes = [];
+        const budgetEvents = [];
+        
+        // Track unique early starts per day
+        const earlyStartMap = new Map();
+        
+        logs.forEach(log => {
+            const timestamp = new Date(log.timestamp);
+            const dateKey = timestamp.toISOString().split('T')[0];
+            
+            if (log.message.includes('Started day early') || log.message.includes('Day started early')) {
+                const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
+                
+                if (!earlyStartMap.has(dateKey) || timeInMinutes < earlyStartMap.get(dateKey).timeInMinutes) {
+                    earlyStartMap.set(dateKey, {
+                        x: timestamp.getTime(),
+                        y: timeInMinutes
+                    });
+                }
+            }
+        });
+        
+        // Add early starts
+        earlyStartMap.forEach(value => {
+            startTimes.push(value);
+        });
+        
+        // Add budget events (filter out middle-of-night entries which are likely errors)
+        budgetHistory.forEach(entry => {
+            const timestamp = new Date(entry.timestamp);
+            const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
+            
+            // Filter outliers: only include reasonable hours (6 AM to 11 PM)
+            if (timeInMinutes >= 360 && timeInMinutes <= 1380) {
+                budgetEvents.push({
+                    x: timestamp.getTime(),
+                    y: timeInMinutes
+                });
+            }
+        });
+        
+        const insights = this._getActivityInsights(startTimes, budgetEvents);
+        
+        return {
+            startTimes,
+            budgetEvents,
+            insights
+        };
+    }
+
+    /**
+     * Render budget burndown chart (LEGACY - kept for compatibility)
      */
     renderBudgetChart() {
         const ctx = document.getElementById('budgetChart');
@@ -1815,8 +2620,21 @@ class ChartService {
      * Update charts with new data
      */
     updateCharts() {
+        // Update new CharTs
+        if (this.charts.budgetHealth) {
+            this.renderBudgetHealthDashboard();
+        }
+        
+        if (this.charts.spendingVelocity) {
+            this.renderSpendingVelocity();
+        }
+        
+        if (this.charts.dailyActivity) {
+            this.renderDailyActivityTimeline();
+        }
+        
+        // Legacy chart support (if still in use)
         if (this.charts.budget) {
-            // For budget chart, it's easier to destroy and recreate due to dynamic datasets
             this.renderBudgetChart();
         }
 
@@ -1836,12 +2654,10 @@ class ChartService {
         }
 
         if (this.charts.budgetPerDayProjectedVsActual) {
-            // For budget per day projected vs actual chart, it's easier to destroy and recreate due to dynamic datasets
             this.renderBudgetPerDayProjectedVsActualChart();
         }
 
         if (this.charts.deltaBudgetPerDay) {
-            // For delta budget chart, it's easier to destroy and recreate due to dynamic datasets
             this.renderDeltaBudgetPerDayChart();
         }
     }

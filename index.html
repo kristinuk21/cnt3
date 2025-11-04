@@ -122,98 +122,80 @@
                                 <div id="logsContent" class="mb-3"></div>
                             </div>
                             <div class="tab-pane fade" id="charts" role="tabpanel" aria-labelledby="charts-tab">
+                                <div class="alert alert-info mb-3" role="alert">
+                                    <strong>🎯 Quick Actions:</strong> Each chart shows specific actions you can take right now. Look for ✓ (good), ⚠️ (warning), or 🚨 (urgent) indicators.
+                                </div>
                                 <div class="row">
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Budget Burndown (Trend Data)</h5>
+                                                <h5 class="mb-0">📊 Budget Health Dashboard</h5>
+                                                <small class="text-muted">Status check + recommended actions</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="budgetChart" width="400" height="200"></canvas>
+                                                <canvas id="budgetHealthChart" width="400" height="180"></canvas>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Budget Per Day: Projected vs Actual</h5>
+                                                <h5 class="mb-0">📈 Spending Velocity</h5>
+                                                <small class="text-muted">Are you spending too fast? What's your target daily limit?</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="budgetPerDayProjectedVsActualChart" width="400" height="250"></canvas>
+                                                <canvas id="spendingVelocityChart" width="400" height="250"></canvas>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Delta Budget (Spent) per Day</h5>
+                                                <h5 class="mb-0">⏰ Daily Activity Timeline</h5>
+                                                <small class="text-muted">Should you start earlier? When do you typically spend?</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="deltaBudgetPerDayChart" width="400" height="250"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-12 mb-4">
-                                        <div class="card bg-dark text-light border-secondary">
-                                            <div class="card-header">
-                                                <h5 class="mb-0">Budget Per Day Trends</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <canvas id="budgetPerDayTrendsChart" width="400" height="250"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-12 mb-4">
-                                        <div class="card bg-dark text-light border-secondary">
-                                            <div class="card-header">
-                                                <h5 class="mb-0">Daily Trends</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <canvas id="trendsChart" width="400" height="200"></canvas>
+                                                <canvas id="dailyActivityChart" width="400" height="220"></canvas>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="charts-history" role="tabpanel" aria-labelledby="charts-history-tab">
+                                <div class="alert alert-info mb-3" role="alert">
+                                    <strong>📈 Learn from History:</strong> Identify patterns and areas for improvement. Focus on your weakest scores and high-spending days.
+                                </div>
                                 <div class="row">
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Historical Budget Comparison (History Data)</h5>
+                                                <h5 class="mb-0">🏆 Performance Scorecard</h5>
+                                                <small class="text-muted">Which area needs your attention most?</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="historicalBudgetChart" width="400" height="200"></canvas>
+                                                <canvas id="performanceScorecardChart" width="400" height="280"></canvas>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Period Spending Patterns</h5>
+                                                <h5 class="mb-0">📊 Daily Spending Rate & Budget Depletion</h5>
+                                                <small class="text-muted">How fast are you depleting the budget? Will it last 15 days?</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="spendingPatternsChart" width="400" height="250"></canvas>
+                                                <canvas id="spendingPatternChart" width="400" height="250"></canvas>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-12 mb-4">
                                         <div class="card bg-dark text-light border-secondary">
                                             <div class="card-header">
-                                                <h5 class="mb-0">Long-Term Trends</h5>
+                                                <h5 class="mb-0">📉 Efficiency Trendline</h5>
+                                                <small class="text-muted">Are you getting better or worse? What changed?</small>
                                             </div>
                                             <div class="card-body">
-                                                <canvas id="longTermTrendsChart" width="400" height="250"></canvas>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-12 mb-4">
-                                        <div class="card bg-dark text-light border-secondary">
-                                            <div class="card-header">
-                                                <h5 class="mb-0">Budget Efficiency History</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <canvas id="budgetEfficiencyChart" width="400" height="250"></canvas>
+                                                <canvas id="efficiencyTrendChart" width="400" height="250"></canvas>
                                             </div>
                                         </div>
                                     </div>

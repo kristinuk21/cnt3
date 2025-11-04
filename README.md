@@ -208,35 +208,50 @@ cnt3/- **HomeProgressBar**: Overall progress visualization
 
 ## 📊 Charts System
 
-The application features a dual chart system providing comprehensive data analysis:
+The application features an improved dual chart system designed for actionable insights:
 
-### CharTs (Trend Data)
-- **Focus**: Real-time trend analysis and current period insights
-- **Charts Available**:
-  - Budget Burndown: Track remaining budget over time
-  - Daily Trends: Visualize work start times and page reloads  
-  - Budget Per Day Trends: Monitor daily spending patterns with smoothing
-  - Projected vs Actual: Compare planned vs actual budget usage
-  - Delta Budget: Track daily spending changes
-- **Purpose**: Monitor current progress and identify short-term patterns
-- **Service**: `ChartService.js`
+### CharTs (Trend Data) - "Am I on track?"
+Focus on current status and immediate actionability:
 
-### CHarts (History Data)
-- **Focus**: Historical analysis and long-term pattern recognition
-- **Charts Available**:
-  - Historical Budget Comparison: Compare budget metrics across periods
-  - Period Spending Patterns: Analyze spending behavior over multiple periods
-  - Long-Term Trends: Track average daily spending and budget utilization
-  - Budget Efficiency History: Visualize budget utilization distribution
-- **Purpose**: Understand historical performance and long-term trends
-- **Service**: `CHistoryService.js`
+- **Budget Health Dashboard** 📊
+  - Quick 3-metric overview: Budget remaining, Daily burn rate, Pace check
+  - Color-coded status indicators (green/yellow/red)
+  - Instant answer to "How am I doing?"
+  
+- **Spending Velocity** 📈
+  - Visual comparison of actual vs ideal spending trajectory
+  - Shows if you're ahead/behind schedule
+  - Cumulative view makes trends obvious
+  
+- **Daily Activity Timeline** ⏰
+  - Scatter plot of work start times and budget events
+  - Helps identify patterns in your work habits
+  - Weekend highlighting for context
 
-### Chart Features
-- **Automatic Updates**: Both chart systems update when budget changes occur
-- **Interactive Elements**: Hover tooltips, responsive design, and color coding
-- **Historical Comparison**: Previous periods shown as background data
-- **Weekend Highlighting**: Different colors for weekend days
-- **Responsive Design**: Charts adapt to different screen sizes
+### CHarts (History Data) - "What's my pattern?"
+Focus on learning from historical performance:
+
+- **Performance Scorecard** 🏆
+  - Radar chart comparing last 4 periods across 5 dimensions
+  - Identifies strengths and weaknesses at a glance
+  - Shows best performing period
+  
+- **Spending Pattern Heatmap** 🔥
+  - Bar chart showing which days of the period have higher spending
+  - Color intensity indicates spending level (green=low, red=high)
+  - Helps predict and plan for high-spend days
+  
+- **Efficiency Trendline** 📉
+  - Line chart tracking improvement over time
+  - Shows if you're getting better at budget management
+  - Clear indication of upward/downward/stable trends
+
+### Key Improvements:
+✓ **Actionable Insights** - Charts answer specific questions instead of just showing data  
+✓ **Visual Clarity** - Color coding and status messages guide interpretation  
+✓ **Reduced Complexity** - 3 focused charts per tab instead of 4-5 overlapping ones  
+✓ **Context Awareness** - Tooltips provide detailed context on hover  
+✓ **Smart Defaults** - Automatically highlights weekends, performance zones, and key metrics
 
 ## 🔄 Usage
 
