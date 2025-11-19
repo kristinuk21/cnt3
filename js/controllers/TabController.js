@@ -3,13 +3,14 @@
  * Follows Single Responsibility Principle - only responsible for tab management
  */
 class TabController {
-    constructor(uiService, dateCalculationService, databaseService, progressCalculationService, chartService, chistoryService) {
+    constructor(uiService, dateCalculationService, databaseService, progressCalculationService, chartService, chistoryService, statisticsService) {
         this.uiService = uiService;
         this.dateCalculationService = dateCalculationService;
         this.databaseService = databaseService;
         this.progressCalculationService = progressCalculationService;
         this.chartService = chartService;
         this.chistoryService = chistoryService;
+        this.statisticsService = statisticsService;
     }
 
     /**
@@ -248,6 +249,25 @@ class TabController {
         };
 
         this.uiService.updateDetailsSection(data);
+        
+        // Get and update spending statistics if service is available
+        if (this.statisticsService) {
+            const stats = this.statisticsService.getCurrentPeriodStatistics();
+            const formattedStats = this.statisticsService.formatForDisplay(stats);
+            
+            // Merge statistics data with formatted display strings
+            const statsForDisplay = {
+                startingBudget: formattedStats.startingBudget,
+                totalSpent: formattedStats.totalSpent,
+                avgSpendingPerDay: formattedStats.avgSpendingPerDay,
+                spendingPace: formattedStats.spendingPace,
+                budgetDuration: formattedStats.budgetDuration,
+                forecastEndDate: formattedStats.forecastEndDate,
+                advice: stats.advice
+            };
+            
+            this.uiService.updateSpendingStatistics(statsForDisplay);
+        }
     }
 
     /**

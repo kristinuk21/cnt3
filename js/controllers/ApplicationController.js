@@ -75,6 +75,12 @@ class ApplicationController {
             this.services.database
         );
 
+        // Initialize statistics service (depends on database and dateCalculation)
+        this.services.statistics = new StatisticsService(
+            this.services.database,
+            this.services.dateCalculation
+        );
+
         // Initialize chart service (depends on database and dateCalculation)
         this.services.chart = new ChartService(
             this.services.database,
@@ -114,7 +120,8 @@ class ApplicationController {
             this.services.database,
             this.services.progressCalculation,
             this.services.chart,
-            this.services.chistory
+            this.services.chistory,
+            this.services.statistics
         );
 
         this.controllers.button = new ButtonController(

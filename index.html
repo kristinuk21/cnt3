@@ -52,11 +52,24 @@
                                         </div>
                                     </div>
 
+                                    <div class="card bg-dark text-light border-secondary mb-3">
+                                        <div class="card-body p-3">
+                                            <h5 class="card-title text-light mb-3">💰 Budget Status</h5>
+                                            <div class="mb-2"><strong>Current budget:</strong> <span id="currentBudget" class="text-light">0</span> RON</div>
+                                            <div class="mb-2"><strong>Budget per day remaining:</strong> <span id="budgetPerDay" class="text-light">0</span> RON/day</div>
+                                            <div class="mb-2"><strong>Starting budget:</strong> <span id="startingBudget" class="text-light">0</span> RON</div>
+                                            <div class="mb-2"><strong>Total spent so far:</strong> <span id="totalSpent" class="text-light">0</span> RON</div>
+                                        </div>
+                                    </div>
+
                                     <div class="card bg-dark text-light border-secondary mb-4">
                                         <div class="card-body p-3">
-                                            <h5 class="card-title text-light mb-3">Budget Information</h5>
-                                            <div class="mb-2"><strong>Current budget:</strong> <span id="currentBudget" class="text-light">0</span> RON</div>
-                                            <div class="mb-2"><strong>Budget per day:</strong> <span id="budgetPerDay" class="text-light">0</span> RON/day</div>
+                                            <h5 class="card-title text-light mb-3">📊 Spending Statistics</h5>
+                                            <div class="mb-2"><strong>Average per day (actual):</strong> <span id="avgSpendingPerDay" class="text-light">0</span> RON/day</div>
+                                            <div class="mb-2"><strong>Spending pace:</strong> <span id="spendingPace" class="text-light">-</span></div>
+                                            <div class="mb-2"><strong>Budget will last:</strong> <span id="budgetDuration" class="text-light">-</span></div>
+                                            <div class="mb-2"><strong>Forecast end date:</strong> <span id="forecastEndDate" class="text-light">-</span></div>
+                                            <div class="mt-3 p-2 rounded" id="spendingAdvice" style="background-color: rgba(108, 117, 125, 0.2);"></div>
                                         </div>
                                     </div>
                                 </section>
@@ -283,6 +296,7 @@
     <script src="js/services/DatabaseService.js?v=20250829"></script>
     <script src="js/services/DateCalculationService.js?v=20250829"></script>
     <script src="js/services/ProgressCalculationService.js?v=20250829"></script>
+    <script src="js/services/StatisticsService.js?v=20250829"></script>
     <script src="js/services/NotificationService.js?v=20250829"></script>
     <script src="js/services/UIService.js?v=20250829"></script>
     <script src="js/services/EventService.js?v=20250829"></script>

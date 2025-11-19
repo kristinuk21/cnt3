@@ -173,6 +173,59 @@ class UIService {
     }
 
     /**
+     * Update spending statistics section
+     * @param {Object} stats - Statistics from StatisticsService
+     */
+    updateSpendingStatistics(stats) {
+        const updateElement = (elementId, content) => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = content;
+            }
+        };
+
+        const updateHtml = (elementId, html) => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = html;
+            }
+        };
+
+        // Update budget status fields
+        updateElement('startingBudget', stats.startingBudget);
+        updateElement('totalSpent', stats.totalSpent);
+        
+        // Update spending statistics
+        updateElement('avgSpendingPerDay', stats.avgSpendingPerDay);
+        updateElement('spendingPace', stats.spendingPace);
+        updateElement('budgetDuration', stats.budgetDuration);
+        updateElement('forecastEndDate', stats.forecastEndDate);
+        
+        // Update advice box with appropriate styling
+        const adviceElement = document.getElementById('spendingAdvice');
+        if (adviceElement && stats.advice) {
+            let bgColor = 'rgba(108, 117, 125, 0.2)'; // default grey
+            let textColor = '#e9ecef';
+            
+            if (stats.advice.status === 'success') {
+                bgColor = 'rgba(40, 167, 69, 0.2)';
+                textColor = '#28a745';
+            } else if (stats.advice.status === 'warning') {
+                bgColor = 'rgba(255, 193, 7, 0.2)';
+                textColor = '#ffc107';
+            } else if (stats.advice.status === 'danger') {
+                bgColor = 'rgba(220, 53, 69, 0.2)';
+                textColor = '#dc3545';
+            }
+            
+            adviceElement.style.backgroundColor = bgColor;
+            adviceElement.style.color = textColor;
+            adviceElement.style.fontWeight = 'bold';
+            adviceElement.textContent = stats.advice.message;
+        }
+    }
+
+    /**
      * Update home section with progress data
      * @param {Object} data - Data object containing progress information
      */
