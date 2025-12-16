@@ -173,7 +173,7 @@ class UIService {
     }
 
     /**
-     * Update spending statistics section
+     * Update spending statistics section with period-based calculations
      * @param {Object} stats - Statistics from StatisticsService
      */
     updateSpendingStatistics(stats) {
@@ -184,22 +184,23 @@ class UIService {
             }
         };
 
-        const updateHtml = (elementId, html) => {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.innerHTML = html;
-            }
-        };
-
-        // Update budget status fields
+        // Update budget overview
         updateElement('startingBudget', stats.startingBudget);
         updateElement('totalSpent', stats.totalSpent);
         
-        // Update spending statistics
-        updateElement('avgSpendingPerDay', stats.avgSpendingPerDay);
-        updateElement('spendingPace', stats.spendingPace);
-        updateElement('budgetDuration', stats.budgetDuration);
-        updateElement('forecastEndDate', stats.forecastEndDate);
+        // Update spending rate analysis
+        updateElement('actualDailyRate', stats.weightedDailyRate);
+        updateElement('targetDailyRate', stats.targetDailyRate);
+        updateElement('spendingPace', stats.pacePercent);
+        updateElement('updateCount', stats.updateCount !== undefined ? stats.updateCount : '-');
+        
+        // Update forecast
+        updateElement('budgetDuration', stats.forecastDays);
+        updateElement('forecastEndDate', stats.forecastDate);
+        
+        // Update best/worst periods
+        updateElement('bestPeriod', stats.bestPeriod);
+        updateElement('worstPeriod', stats.worstPeriod);
         
         // Update advice box with appropriate styling
         const adviceElement = document.getElementById('spendingAdvice');
@@ -207,13 +208,13 @@ class UIService {
             let bgColor = 'rgba(108, 117, 125, 0.2)'; // default grey
             let textColor = '#e9ecef';
             
-            if (stats.advice.status === 'success') {
+            if (stats.status === 'success') {
                 bgColor = 'rgba(40, 167, 69, 0.2)';
                 textColor = '#28a745';
-            } else if (stats.advice.status === 'warning') {
+            } else if (stats.status === 'warning') {
                 bgColor = 'rgba(255, 193, 7, 0.2)';
                 textColor = '#ffc107';
-            } else if (stats.advice.status === 'danger') {
+            } else if (stats.status === 'danger') {
                 bgColor = 'rgba(220, 53, 69, 0.2)';
                 textColor = '#dc3545';
             }
@@ -221,7 +222,7 @@ class UIService {
             adviceElement.style.backgroundColor = bgColor;
             adviceElement.style.color = textColor;
             adviceElement.style.fontWeight = 'bold';
-            adviceElement.textContent = stats.advice.message;
+            adviceElement.textContent = stats.advice;
         }
     }
 

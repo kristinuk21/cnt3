@@ -1,7 +1,9 @@
 /**
- * ChartService (CharTs) - Handles chart rendering and data visualization for trend data
- * Focuses on trend analysis: budget burndowns, spending patterns, and temporal analysis
- * Follows Single Responsibility Principle - only responsible for trend chart operations
+ * ChartService (CharTs) - Handles chart rendering and data visualization
+ * 
+ * KEY INSIGHT: Budget updates represent periodic snapshots.
+ * Spending = change between snapshots / days elapsed.
+ * Charts show period-based analysis, not point-in-time data.
  */
 class ChartService {
     constructor(databaseService, dateCalculationService) {
@@ -14,1158 +16,128 @@ class ChartService {
      * Initialize all CharTs (trend charts) when the CharTs tab is shown
      */
     initializeCharts() {
-        this.renderBudgetHealthDashboard();
-        this.renderSpendingVelocity();
-        this.renderDailyActivityTimeline();
+        this.renderPeriodRatesChart();
+        this.renderBudgetTimelineChart();
+        this.renderPaceGaugeChart();
     }
 
     /**
-     * Render Budget Health Dashboard - Comprehensive budget status at a glance
-     * Shows: Current budget, daily burn rate, days remaining, and pace indicators
+     * Get spending periods from budget history
+     * Each period = gap between consecutive budget updates
+     * @private
      */
-    renderBudgetHealthDashboard() {
-        const ctx = document.getElementById('budgetHealthChart');
+    _getSpendingPeriods() {
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        // Get current period boundaries
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        
+        // Filter and sort chronologically
+        const history = budgetHistory.filter(entry => {
+            const d = new Date(entry.timestamp);
+            return d >= periodStart && d <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        if (history.length < 2) return [];
+        
+        const periods = [];
+        for (let i = 1; i < history.length; i++) {
+            const prev = history[i - 1];
+            const curr = history[i];
+            const prevDate = new Date(prev.timestamp);
+            const currDate = new Date(curr.timestamp);
+            const days = Math.max(1, Math.round((currDate - prevDate) / (1000 * 60 * 60 * 24)));
+            const spent = prev.amount - curr.amount;
+            const dailyRate = spent / days;
+            
+            periods.push({
+                startDate: prevDate,
+                endDate: currDate,
+                startBudget: prev.amount,
+                endBudget: curr.amount,
+                days,
+                spent,
+                dailyRate
+            });
+        }
+        
+        return periods;
+    }
+
+    /**
+     * Render Period Rates Chart - Bar chart showing daily rate for each update period
+     */
+    renderPeriodRatesChart() {
+        const ctx = document.getElementById('periodRatesChart');
         if (!ctx) return;
 
         const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
+        if (!ChartConstructor) return;
+
+        if (this.charts.periodRates) {
+            this.charts.periodRates.destroy();
         }
 
-        if (this.charts.budgetHealth) {
-            this.charts.budgetHealth.destroy();
-        }
-
-        const healthData = this._prepareBudgetHealthData();
+        const periods = this._getSpendingPeriods();
         
-        this.charts.budgetHealth = new ChartConstructor(ctx, {
+        // Calculate target daily rate for comparison line
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
+        
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        const currentPeriodHistory = budgetHistory.filter(entry => {
+            const d = new Date(entry.timestamp);
+            return d >= periodStart && d <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        const startingBudget = currentPeriodHistory.length > 0 ? currentPeriodHistory[0].amount : 0;
+        const targetDailyRate = totalDays > 0 ? startingBudget / totalDays : 0;
+        
+        // Format labels
+        const formatDate = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        
+        const labels = periods.map((p, i) => `${formatDate(p.startDate)} - ${formatDate(p.endDate)}\n(${p.days}d)`);
+        const dailyRates = periods.map(p => Math.round(p.dailyRate * 10) / 10);
+        const targetLine = periods.map(() => targetDailyRate);
+        
+        // Color bars based on comparison to target
+        const barColors = dailyRates.map(rate => {
+            if (rate <= targetDailyRate * 0.8) return 'rgba(40, 167, 69, 0.8)'; // Under budget - green
+            if (rate <= targetDailyRate * 1.1) return 'rgba(255, 193, 7, 0.8)'; // Near target - yellow
+            return 'rgba(220, 53, 69, 0.8)'; // Over budget - red
+        });
+        
+        this.charts.periodRates = new ChartConstructor(ctx, {
             type: 'bar',
             data: {
-                labels: ['Budget Status', 'Daily Burn', 'Pace Check'],
-                datasets: [{
-                    label: 'Current',
-                    data: [healthData.budgetPercent, healthData.burnRate, healthData.paceScore],
-                    backgroundColor: [
-                        healthData.budgetColor,
-                        healthData.burnColor,
-                        healthData.paceColor
-                    ],
-                    borderColor: [
-                        healthData.budgetColor.replace('0.7', '1'),
-                        healthData.burnColor.replace('0.7', '1'),
-                        healthData.paceColor.replace('0.7', '1')
-                    ],
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const index = context.dataIndex;
-                                if (index === 0) {
-                                    return `Budget Remaining: ${Math.round(healthData.currentBudget)} RON (${Math.round(context.parsed.x)}%)`;
-                                } else if (index === 1) {
-                                    return `Daily Burn Rate: ${Math.round(healthData.actualBurnRate)} RON/day (Target: ${Math.round(healthData.targetBurnRate)})`;
-                                } else {
-                                    return `Pace: ${healthData.paceStatus} (${Math.round(context.parsed.x)} score)`;
-                                }
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: [healthData.statusMessage, ...healthData.actions],
-                        color: '#e9ecef',
-                        font: {
-                            size: 13,
-                            weight: 'bold'
-                        },
-                        padding: {
-                            bottom: 15
-                        }
-                    },
-                    annotation: {
-                        annotations: {
-                            dangerZone: {
-                                type: 'box',
-                                xMin: 0,
-                                xMax: 70,
-                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                                borderWidth: 0
-                            },
-                            warningZone: {
-                                type: 'box',
-                                xMin: 70,
-                                xMax: 90,
-                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                                borderWidth: 0
-                            },
-                            safeZone: {
-                                type: 'box',
-                                xMin: 90,
-                                xMax: 100,
-                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                                borderWidth: 0
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#e9ecef',
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        },
-                        grid: {
-                            display: false
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Render Spending Velocity - Visual representation of spending pace over time
-     * Shows actual spending trajectory vs ideal linear spending
-     */
-    renderSpendingVelocity() {
-        const ctx = document.getElementById('spendingVelocityChart');
-        if (!ctx) return;
-
-        const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
-        }
-
-        if (this.charts.spendingVelocity) {
-            this.charts.spendingVelocity.destroy();
-        }
-
-        const velocityData = this._prepareSpendingVelocityData();
-        
-        this.charts.spendingVelocity = new ChartConstructor(ctx, {
-            type: 'line',
-            data: {
-                labels: velocityData.labels,
+                labels: labels,
                 datasets: [
                     {
-                        label: 'Ideal Linear Spending',
-                        data: velocityData.idealSpending,
-                        borderColor: 'rgba(108, 117, 125, 0.5)',
-                        backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                        label: 'Your Daily Rate (RON/day)',
+                        data: dailyRates,
+                        backgroundColor: barColors,
+                        borderColor: barColors.map(c => c.replace('0.8', '1')),
+                        borderWidth: 2
+                    },
+                    {
+                        label: `Target Rate (${Math.round(targetDailyRate)} RON/day)`,
+                        data: targetLine,
+                        type: 'line',
+                        borderColor: 'rgba(255, 255, 255, 0.5)',
                         borderWidth: 2,
                         borderDash: [5, 5],
                         pointRadius: 0,
-                        tension: 0,
-                        fill: true
-                    },
-                    {
-                        label: 'Actual Spending',
-                        data: velocityData.actualSpending,
-                        borderColor: velocityData.isOnTrack ? '#28a745' : '#dc3545',
-                        backgroundColor: velocityData.isOnTrack ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: velocityData.isOnTrack ? '#28a745' : '#dc3545',
-                        tension: 0.3,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true,
-                            font: {
-                                size: 11
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.dataset.label}: ${Math.round(context.parsed.y)} RON spent`;
-                            },
-                            footer: function(tooltipItems) {
-                                const day = tooltipItems[0].label;
-                                const actual = tooltipItems.find(item => item.dataset.label === 'Actual Spending')?.parsed.y || 0;
-                                const ideal = tooltipItems.find(item => item.dataset.label === 'Ideal Linear Spending')?.parsed.y || 0;
-                                const diff = actual - ideal;
-                                const status = diff > 0 ? 'overspent' : 'under budget';
-                                return `${Math.abs(Math.round(diff))} RON ${status}`;
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: velocityData.actions,
-                        color: velocityData.isOnTrack ? '#28a745' : '#dc3545',
-                        font: {
-                            size: 12,
-                            weight: 'bold'
-                        },
-                        padding: {
-                            bottom: 20
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: function(context) {
-                                const label = context.tick.label;
-                                const dayMatch = label.match(/Day (\d+)/);
-                                if (!dayMatch) return '#e9ecef';
-                                
-                                const dayNum = parseInt(dayMatch[1]);
-                                const date = new Date(velocityData.periodStart);
-                                date.setDate(date.getDate() + dayNum - 1);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            },
-                            maxRotation: 45,
-                            minRotation: 0
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.1)'
-                        }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                return Math.round(value) + ' RON';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Cumulative Spending',
-                            color: '#e9ecef'
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Render Daily Activity Timeline - Shows work patterns and significant events
-     */
-    renderDailyActivityTimeline() {
-        const ctx = document.getElementById('dailyActivityChart');
-        if (!ctx) return;
-
-        const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
-        }
-
-        if (this.charts.dailyActivity) {
-            this.charts.dailyActivity.destroy();
-        }
-
-        const activityData = this._prepareDailyActivityData();
-        
-        this.charts.dailyActivity = new ChartConstructor(ctx, {
-            type: 'scatter',
-            data: {
-                datasets: [
-                    {
-                        label: 'Work Start Times',
-                        data: activityData.startTimes,
-                        backgroundColor: '#ffc107',
-                        borderColor: '#ffc107',
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        pointStyle: 'circle'
-                    },
-                    {
-                        label: 'Budget Changes',
-                        data: activityData.budgetEvents,
-                        backgroundColor: '#17a2b8',
-                        borderColor: '#17a2b8',
-                        pointRadius: 7,
-                        pointHoverRadius: 9,
-                        pointStyle: 'rectRot'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: activityData.insights,
-                        color: '#e9ecef',
-                        font: {
-                            size: 12
-                        },
-                        padding: {
-                            bottom: 15
-                        }
-                    },
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const hours = Math.floor(context.parsed.y / 60);
-                                const minutes = context.parsed.y % 60;
-                                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                                
-                                if (context.datasetIndex === 0) {
-                                    return `Started at: ${timeStr}`;
-                                } else {
-                                    return `Budget event at: ${timeStr}`;
-                                }
-                            },
-                            title: function(tooltipItems) {
-                                const date = new Date(tooltipItems[0].parsed.x);
-                                return date.toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM dd'
-                            }
-                        },
-                        ticks: {
-                            color: function(context) {
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.2)' : 'rgba(233, 236, 239, 0.1)';
-                            }
-                        }
-                    },
-                    y: {
-                        min: 6 * 60,
-                        max: 20 * 60,
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                const hours = Math.floor(value / 60);
-                                const minutes = value % 60;
-                                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                            },
-                            stepSize: 120
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Time of Day',
-                            color: '#e9ecef'
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Filter outliers from data using IQR method
-     * @private
-     */
-    _filterOutliers(data) {
-        if (data.length < 4) return data;
-        
-        const sorted = [...data].sort((a, b) => a - b);
-        const q1Index = Math.floor(sorted.length * 0.25);
-        const q3Index = Math.floor(sorted.length * 0.75);
-        const q1 = sorted[q1Index];
-        const q3 = sorted[q3Index];
-        const iqr = q3 - q1;
-        const lowerBound = q1 - (1.5 * iqr);
-        const upperBound = q3 + (1.5 * iqr);
-        
-        return data.filter(value => value >= lowerBound && value <= upperBound);
-    }
-
-    /**
-     * Get action recommendation based on budget health
-     * @private
-     */
-    _getActionRecommendation(paceScore, burnRatePercent, budgetPercent, remainingDays) {
-        const actions = [];
-        
-        if (paceScore > 130) {
-            actions.push('✓ EXCELLENT: Well under budget');
-            actions.push('Safe to maintain or slightly increase spending');
-        } else if (paceScore > 110) {
-            actions.push('✓ GOOD: You have budget flexibility');
-            actions.push('Current pace is working well');
-        } else if (paceScore < 70) {
-            actions.push('🚨 URGENT: Reduce spending immediately');
-            if (remainingDays > 3) {
-                const dailyTarget = (budgetPercent / remainingDays);
-                actions.push(`Target: Max ${Math.round(dailyTarget * remainingDays)} RON total remaining`);
-            } else {
-                actions.push('Consider emergency budget review');
-            }
-        } else if (paceScore < 90) {
-            actions.push('⚠️ ACTION: Review spending patterns');
-            actions.push('Look for non-essential expenses to cut');
-        } else {
-            actions.push('✓ MAINTAIN: Current pace is good');
-            actions.push('Continue with current spending habits');
-        }
-        
-        return actions;
-    }
-
-    /**
-     * Prepare budget health dashboard data
-     * @private
-     */
-    _prepareBudgetHealthData() {
-        const currentBudget = this.databaseService.getCurrentBudget();
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        const remainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
-        
-        // Get period info
-        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        
-        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const periodStart = new Date(startYear, startMonth - 1, startDay);
-        const periodEnd = new Date(endYear, endMonth - 1, endDay);
-        
-        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
-        const daysElapsed = totalDays - remainingDays;
-        
-        // Calculate starting budget
-        const currentPeriodHistory = budgetHistory.filter(entry => {
-            const entryDate = new Date(entry.timestamp);
-            return entryDate >= periodStart && entryDate <= periodEnd;
-        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        
-        const startingBudget = currentPeriodHistory.length > 0 ? currentPeriodHistory[0].amount : currentBudget;
-        const totalSpent = startingBudget - currentBudget;
-        
-        // Budget percentage
-        const budgetPercent = (currentBudget / startingBudget) * 100;
-        
-        // Burn rate calculations
-        const actualBurnRate = daysElapsed > 0 ? totalSpent / daysElapsed : 0;
-        const targetBurnRate = startingBudget / totalDays;
-        const burnRatePercent = targetBurnRate > 0 ? (actualBurnRate / targetBurnRate) * 100 : 0;
-        
-        // Pace calculation (percentage of budget that should be remaining)
-        const idealRemainingPercent = (remainingDays / totalDays) * 100;
-        const paceScore = idealRemainingPercent > 0 ? (budgetPercent / idealRemainingPercent) * 100 : 100;
-        
-        // Status messages
-        let statusMessage = '';
-        let paceStatus = '';
-        
-        if (paceScore < 70) {
-            statusMessage = '✗ Critical! Spending way too fast';
-            paceStatus = 'Critical';
-        } else if (paceScore < 90) {
-            statusMessage = '⚠ Warning: Over budget pace';
-            paceStatus = 'Over Pace';
-        } else if (paceScore < 110) {
-            statusMessage = '✓ Good! On track with budget';
-            paceStatus = 'On Track';
-        } else {
-            statusMessage = '✓ Excellent! Under budget';
-            paceStatus = 'Ahead';
-        }
-        
-        // Colors based on performance
-        const getBudgetColor = () => {
-            if (budgetPercent > 50) return 'rgba(40, 167, 69, 0.7)';
-            if (budgetPercent > 25) return 'rgba(255, 193, 7, 0.7)';
-            return 'rgba(220, 53, 69, 0.7)';
-        };
-        
-        const getBurnColor = () => {
-            if (burnRatePercent < 90) return 'rgba(40, 167, 69, 0.7)';
-            if (burnRatePercent < 110) return 'rgba(255, 193, 7, 0.7)';
-            return 'rgba(220, 53, 69, 0.7)';
-        };
-        
-        const getPaceColor = () => {
-            if (paceScore < 70) return 'rgba(220, 53, 69, 0.7)';
-            if (paceScore < 90) return 'rgba(255, 193, 7, 0.7)';
-            return 'rgba(40, 167, 69, 0.7)';
-        };
-        
-        const actions = this._getActionRecommendation(paceScore, burnRatePercent, budgetPercent, remainingDays);
-        
-        return {
-            currentBudget,
-            budgetPercent: Math.min(100, budgetPercent),
-            burnRate: Math.min(100, burnRatePercent),
-            paceScore: Math.min(100, paceScore),
-            actualBurnRate,
-            targetBurnRate,
-            statusMessage,
-            paceStatus,
-            budgetColor: getBudgetColor(),
-            burnColor: getBurnColor(),
-            paceColor: getPaceColor(),
-            actions,
-            remainingDays
-        };
-    }
-
-    /**
-     * Get spending velocity action recommendation
-     * @private
-     */
-    _getVelocityAction(overspendPercent, daysRemaining, currentBudget) {
-        if (overspendPercent > 20) {
-            const dailyMax = Math.round(currentBudget / daysRemaining);
-            return [
-                '🚨 CRITICAL: Spending too fast',
-                `Action: Limit to ${dailyMax} RON/day maximum`,
-                'Review all non-essential expenses now'
-            ];
-        } else if (overspendPercent > 10) {
-            const dailyTarget = Math.round(currentBudget / daysRemaining * 0.9);
-            return [
-                '⚠️ WARNING: Above ideal pace',
-                `Action: Target ${dailyTarget} RON/day or less`,
-                'Start cutting discretionary spending'
-            ];
-        } else if (overspendPercent < -10) {
-            return [
-                '✓ EXCELLENT: Well under budget',
-                'Action: Current approach is working',
-                'Safe to maintain or slightly increase spending'
-            ];
-        } else {
-            return [
-                '✓ ON TRACK: Spending aligned with plan',
-                'Action: Continue current spending habits',
-                'No changes needed at this time'
-            ];
-        }
-    }
-
-    /**
-     * Prepare spending velocity data
-     * @private
-     */
-    _prepareSpendingVelocityData() {
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        
-        // Get period info
-        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        
-        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const periodStart = new Date(startYear, startMonth - 1, startDay);
-        const periodEnd = new Date(endYear, endMonth - 1, endDay);
-        const now = new Date();
-        
-        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
-        const currentDayIndex = Math.floor((now - periodStart) / (1000 * 60 * 60 * 24));
-        
-        // Get current period history
-        const currentPeriodHistory = budgetHistory.filter(entry => {
-            const entryDate = new Date(entry.timestamp);
-            return entryDate >= periodStart && entryDate <= periodEnd;
-        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        
-        if (currentPeriodHistory.length === 0) {
-            return {
-                labels: ['Day 1'],
-                idealSpending: [0],
-                actualSpending: [0],
-                isOnTrack: true,
-                velocityMessage: 'No spending data available',
-                periodStart
-            };
-        }
-        
-        const startingBudget = currentPeriodHistory[0].amount;
-        const currentBudgetAmount = this.databaseService.getCurrentBudget();
-        const totalSpent = startingBudget - currentBudgetAmount;
-        
-        // Calculate ideal linear spending
-        const labels = [];
-        const idealSpending = [];
-        const actualSpending = [];
-        
-        const dailyIdealSpend = startingBudget / totalDays;
-        
-        // Build data arrays
-        for (let i = 0; i <= Math.min(currentDayIndex, totalDays); i++) {
-            labels.push(`Day ${i + 1}`);
-            idealSpending.push(dailyIdealSpend * (i + 1));
-            
-            // Find actual spending up to this day
-            const date = new Date(periodStart);
-            date.setDate(periodStart.getDate() + i);
-            date.setHours(23, 59, 59, 999);
-            
-            const historyUpToDay = currentPeriodHistory.filter(entry => 
-                new Date(entry.timestamp) <= date
-            );
-            
-            if (historyUpToDay.length > 0) {
-                const budgetAtDay = historyUpToDay[historyUpToDay.length - 1].amount;
-                actualSpending.push(startingBudget - budgetAtDay);
-            } else {
-                actualSpending.push(0);
-            }
-        }
-        
-        // Filter outliers from actual spending data
-        const spendingDeltas = [];
-        for (let i = 1; i < actualSpending.length; i++) {
-            spendingDeltas.push(actualSpending[i] - actualSpending[i - 1]);
-        }
-        const filteredDeltas = this._filterOutliers(spendingDeltas);
-        const avgDelta = filteredDeltas.length > 0 ? 
-            filteredDeltas.reduce((a, b) => a + b, 0) / filteredDeltas.length : 0;
-        
-        // Smooth outliers in actual spending
-        for (let i = 1; i < actualSpending.length; i++) {
-            const delta = actualSpending[i] - actualSpending[i - 1];
-            if (delta > avgDelta * 3) { // Outlier detection
-                actualSpending[i] = actualSpending[i - 1] + avgDelta;
-            }
-        }
-        
-        // Determine if on track
-        const currentIdealSpending = dailyIdealSpend * (currentDayIndex + 1);
-        const isOnTrack = totalSpent <= currentIdealSpending * 1.1; // 10% tolerance
-        
-        const overspendPercent = ((totalSpent / currentIdealSpending) - 1) * 100;
-        const remainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
-        const remainingBudget = this.databaseService.getCurrentBudget();
-        
-        const actions = this._getVelocityAction(overspendPercent, remainingDays, remainingBudget);
-        let velocityMessage = actions[0]; // First line is the status
-        
-        return {
-            labels,
-            idealSpending,
-            actualSpending,
-            isOnTrack,
-            velocityMessage,
-            periodStart,
-            actions,
-            overspendPercent
-        };
-    }
-
-    /**
-     * Get activity pattern insights
-     * @private
-     */
-    _getActivityInsights(startTimes, budgetEvents) {
-        if (startTimes.length === 0 && budgetEvents.length === 0) {
-            return ['No activity data available yet'];
-        }
-        
-        const insights = [];
-        
-        // Analyze start times
-        if (startTimes.length > 0) {
-            const avgStartMinutes = startTimes.reduce((sum, item) => sum + item.y, 0) / startTimes.length;
-            const avgHour = Math.floor(avgStartMinutes / 60);
-            const avgMin = Math.floor(avgStartMinutes % 60);
-            
-            if (avgStartMinutes < 540) { // Before 9 AM
-                insights.push(`✓ Great! Average start: ${avgHour}:${avgMin.toString().padStart(2, '0')}`);
-                insights.push('Early starts give you more productive time');
-            } else if (avgStartMinutes > 660) { // After 11 AM
-                insights.push(`⚠️ Late starts: Average ${avgHour}:${avgMin.toString().padStart(2, '0')}`);
-                insights.push('Try starting earlier for better time management');
-            } else {
-                insights.push(`✓ Consistent starts: ~${avgHour}:${avgMin.toString().padStart(2, '0')}`);
-            }
-        }
-        
-        // Analyze budget events
-        if (budgetEvents.length > 3) {
-            const eventTimes = budgetEvents.map(e => e.y);
-            const avgEventTime = eventTimes.reduce((a, b) => a + b, 0) / eventTimes.length;
-            const eventHour = Math.floor(avgEventTime / 60);
-            
-            if (eventHour < 12) {
-                insights.push('Budget changes cluster in morning hours');
-            } else if (eventHour < 17) {
-                insights.push('Budget changes cluster in afternoon');
-            } else {
-                insights.push('Budget changes often happen in evening');
-            }
-        }
-        
-        return insights;
-    }
-
-    /**
-     * Prepare daily activity timeline data
-     * @private
-     */
-    _prepareDailyActivityData() {
-        const logs = this.databaseService.getLogs();
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        
-        const startTimes = [];
-        const budgetEvents = [];
-        
-        // Track unique early starts per day
-        const earlyStartMap = new Map();
-        
-        logs.forEach(log => {
-            const timestamp = new Date(log.timestamp);
-            const dateKey = timestamp.toISOString().split('T')[0];
-            
-            if (log.message.includes('Started day early') || log.message.includes('Day started early')) {
-                const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
-                
-                if (!earlyStartMap.has(dateKey) || timeInMinutes < earlyStartMap.get(dateKey).timeInMinutes) {
-                    earlyStartMap.set(dateKey, {
-                        x: timestamp.getTime(),
-                        y: timeInMinutes
-                    });
-                }
-            }
-        });
-        
-        // Add early starts
-        earlyStartMap.forEach(value => {
-            startTimes.push(value);
-        });
-        
-        // Add budget events (filter out middle-of-night entries which are likely errors)
-        budgetHistory.forEach(entry => {
-            const timestamp = new Date(entry.timestamp);
-            const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
-            
-            // Filter outliers: only include reasonable hours (6 AM to 11 PM)
-            if (timeInMinutes >= 360 && timeInMinutes <= 1380) {
-                budgetEvents.push({
-                    x: timestamp.getTime(),
-                    y: timeInMinutes
-                });
-            }
-        });
-        
-        const insights = this._getActivityInsights(startTimes, budgetEvents);
-        
-        return {
-            startTimes,
-            budgetEvents,
-            insights
-        };
-    }
-
-    /**
-     * Render budget burndown chart (LEGACY - kept for compatibility)
-     */
-    renderBudgetChart() {
-        const ctx = document.getElementById('budgetChart');
-        if (!ctx) return;
-
-        // Check if Chart.js is available
-        const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
-        }
-
-        // Destroy existing chart if it exists
-        if (this.charts.budget) {
-            this.charts.budget.destroy();
-        }
-
-        const chartData = this._prepareBudgetData();
-        
-        // Create datasets starting with historical periods
-        const datasets = [];
-        
-        // Check if we have meaningful data to display
-        const hasActualData = chartData.actual.some(val => val !== null);
-        const hasProjectedData = chartData.projected.some(val => val !== null);
-        
-        // Add previous periods datasets (oldest to newest) - only if we have current period data
-        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0 && (hasActualData || hasProjectedData)) {
-            // Sort by period index (oldest first)
-            const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
-            
-            sortedPreviousPeriods.forEach((periodData, index) => {
-                const periodIndex = periodData.periodIndex;
-                const opacity = Math.max(0.15, 0.8 - (periodIndex - 1) * 0.2); // Fade older periods
-                const lineWidth = Math.max(1, 4 - periodIndex); // Thinner lines for older periods
-                
-                // Generate period label
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthName = monthNames[periodData.month];
-                const halfLabel = periodData.isFirstHalf ? '1st' : '2nd';
-                const label = `${monthName} ${periodData.year} (${halfLabel} half)`;
-                
-                datasets.push({
-                    label: label,
-                    data: periodData.data,
-                    borderColor: `rgba(108, 117, 125, ${opacity})`, // Gray with varying opacity
-                    backgroundColor: 'transparent',
-                    tension: 0.1,
-                    borderWidth: lineWidth,
-                    pointRadius: 0, // No points for historical data
-                    pointHoverRadius: 0,
-                    spanGaps: true,
-                    order: 10 + periodIndex, // Higher order number = rendered behind
-                });
-            });
-        }
-        
-        // Add current period datasets (on top) - only if we have data
-        if (hasProjectedData) {
-            datasets.push({
-                label: 'Projected Budget',
-                data: chartData.projected,
-                borderColor: '#17a2b8',
-                backgroundColor: 'rgba(23, 162, 184, 0.1)',
-                tension: 0.1,
-                borderDash: [5, 5],
-                borderWidth: 2,
-                order: 2 // Rendered on top
-            });
-        }
-        
-        if (hasActualData) {
-            datasets.push({
-                label: 'Actual Budget',
-                data: chartData.actual,
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                tension: 0.1,
-                spanGaps: true, // Connect points across null values
-                pointRadius: 5,
-                pointHoverRadius: 8,
-                showLine: true,
-                borderWidth: 3,
-                order: 1 // Rendered on top
-            });
-        }
-        
-        // If no meaningful data, show a placeholder message
-        if (!hasActualData && !hasProjectedData) {
-            datasets.push({
-                label: 'No budget data for current period',
-                data: [], // Empty data
-                borderColor: '#6c757d',
-                backgroundColor: 'transparent',
-                tension: 0.1,
-                pointRadius: 0,
-                showLine: false,
-                order: 1
-            });
-        }
-        
-        this.charts.budget = new ChartConstructor(ctx, {
-            type: 'line',
-            data: {
-                labels: chartData.labels,
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: function(context) {
-                                // Color weekend days differently
-                                const index = context.index;
-                                const date = new Date(chartData.periodStart);
-                                date.setDate(chartData.periodStart.getDate() + index);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                // Different grid color for weekend days
-                                const index = context.index;
-                                const date = new Date(chartData.periodStart);
-                                date.setDate(chartData.periodStart.getDate() + index);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
-                            }
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                return value + ' RON';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Render daily trends chart
-     */
-    renderTrendsChart() {
-        const ctx = document.getElementById('trendsChart');
-        if (!ctx) return;
-
-        // Check if Chart.js is available
-        const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
-        }
-
-        // Destroy existing chart if it exists
-        if (this.charts.trends) {
-            this.charts.trends.destroy();
-        }
-
-        const chartData = this._prepareTrendsData();
-        
-        this.charts.trends = new ChartConstructor(ctx, {
-            type: 'scatter',
-            data: {
-                datasets: [
-                    {
-                        label: 'Early Starts',
-                        data: chartData.earlyStarts,
-                        backgroundColor: '#ffc107',
-                        borderColor: '#ffc107',
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        pointStyle: 'line'
-                    },
-                    {
-                        label: 'Page Reloads',
-                        data: chartData.pageReloads,
-                        backgroundColor: '#6c757d',
-                        borderColor: '#6c757d',
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        pointStyle: 'line'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const hours = Math.floor(context.parsed.y / 60);
-                                const minutes = context.parsed.y % 60;
-                                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                                return `${context.dataset.label}: ${timeStr}`;
-                            },
-                            title: function(tooltipItems) {
-                                const date = new Date(tooltipItems[0].parsed.x);
-                                return date.toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM dd'
-                            }
-                        },
-                        ticks: {
-                            color: function(context) {
-                                // Color weekend days differently for trends chart
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                // Different grid color for weekend days in trends chart
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
-                            }
-                        }
-                    },
-                    y: {
-                        min: 6 * 60, // Start at 6:00 AM (360 minutes)
-                        max: 24 * 60, // 24 hours in minutes
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                const hours = Math.floor(value / 60);
-                                const minutes = value % 60;
-                                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                            },
-                            stepSize: 60 // Show tick every hour
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Render budget per day trends chart with smoothing
-     */
-    renderBudgetPerDayTrendsChart() {
-        const ctx = document.getElementById('budgetPerDayTrendsChart');
-        if (!ctx) return;
-
-        // Check if Chart.js is available
-        const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
-        }
-
-        // Destroy existing chart if it exists
-        if (this.charts.budgetPerDayTrends) {
-            this.charts.budgetPerDayTrends.destroy();
-        }
-
-        const chartData = this._prepareBudgetPerDayTrendsData();
-        
-        this.charts.budgetPerDayTrends = new ChartConstructor(ctx, {
-            type: 'line',
-            data: {
-                datasets: [
-                    {
-                        label: 'Raw Data',
-                        data: chartData.rawData,
-                        borderColor: '#ffc107',
-                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                        pointRadius: 3,
-                        pointHoverRadius: 6,
-                        tension: 0,
-                        borderWidth: 2,
-                        pointBackgroundColor: '#ffc107'
-                    },
-                    {
-                        label: '7-day Average',
-                        data: chartData.smoothedData,
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        pointRadius: 4,
-                        pointHoverRadius: 8,
-                        tension: 0.4,
-                        borderWidth: 3,
-                        pointBackgroundColor: '#28a745'
-                    },
-                    {
-                        label: 'Trend Line',
-                        data: chartData.trendLine,
-                        borderColor: '#dc3545',
-                        backgroundColor: 'rgba(220, 53, 69, 0.05)',
-                        pointRadius: 0,
-                        tension: 0,
-                        borderWidth: 2,
-                        borderDash: [8, 4],
                         fill: false
                     }
                 ]
@@ -1175,73 +147,40 @@ class ChartService {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
+                        labels: { color: '#e9ecef' }
                     },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
-                                const value = context.parsed.y;
-                                return `${context.dataset.label}: ${Math.round(value)} RON/day`;
-                            },
-                            title: function(tooltipItems) {
-                                const date = new Date(tooltipItems[0].parsed.x);
-                                return date.toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
+                            afterLabel: (context) => {
+                                if (context.datasetIndex === 0) {
+                                    const period = periods[context.dataIndex];
+                                    return [
+                                        `Spent: ${Math.round(period.spent)} RON over ${period.days} days`,
+                                        `Budget: ${Math.round(period.startBudget)} → ${Math.round(period.endBudget)} RON`
+                                    ];
+                                }
+                                return '';
                             }
                         }
+                    },
+                    title: {
+                        display: periods.length === 0,
+                        text: 'No spending periods yet. Update your budget to see data.',
+                        color: '#e9ecef'
                     }
                 },
                 scales: {
                     x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM dd'
-                            }
-                        },
-                        ticks: {
-                            color: function(context) {
-                                // Color weekend days differently
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                // Different grid color for weekend days
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: '#e9ecef'
-                        }
+                        ticks: { color: '#e9ecef', maxRotation: 45 },
+                        grid: { color: 'rgba(233, 236, 239, 0.1)' }
                     },
                     y: {
                         beginAtZero: true,
                         ticks: {
                             color: '#e9ecef',
-                            callback: function(value) {
-                                return Math.round(value) + ' RON/day';
-                            }
+                            callback: (v) => v + ' RON/day'
                         },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        }
+                        grid: { color: 'rgba(233, 236, 239, 0.2)' }
                     }
                 }
             }
@@ -1249,196 +188,131 @@ class ChartService {
     }
 
     /**
-     * Render budget per day projected vs actual chart
+     * Render Budget Timeline Chart - Shows budget balance over time
      */
-    renderBudgetPerDayProjectedVsActualChart() {
-        const ctx = document.getElementById('budgetPerDayProjectedVsActualChart');
+    renderBudgetTimelineChart() {
+        const ctx = document.getElementById('budgetTimelineChart');
         if (!ctx) return;
 
-        // Check if Chart.js is available
         const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
+        if (!ChartConstructor) return;
+
+        if (this.charts.budgetTimeline) {
+            this.charts.budgetTimeline.destroy();
+        }
+
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        
+        // Get period boundaries
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        
+        // Filter and sort
+        const history = budgetHistory.filter(entry => {
+            const d = new Date(entry.timestamp);
+            return d >= periodStart && d <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        if (history.length === 0) {
+            this.charts.budgetTimeline = new ChartConstructor(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'No budget data for current period',
+                            color: '#e9ecef'
+                        }
+                    }
+                }
+            });
             return;
         }
-
-        // Destroy existing chart if it exists
-        if (this.charts.budgetPerDayProjectedVsActual) {
-            this.charts.budgetPerDayProjectedVsActual.destroy();
-        }
-
-        const chartData = this._prepareBudgetPerDayProjectedVsActualData();
         
-        // Create datasets starting with historical periods
-        const datasets = [];
+        // Build stepped data points
+        const dataPoints = history.map(entry => ({
+            x: new Date(entry.timestamp),
+            y: entry.amount
+        }));
         
-        // Check if we have meaningful data to display
-        const hasActualData = chartData.actualData.length > 0;
-        const hasProjectedData = chartData.projectedData.length > 0;
-        
-        // Add previous periods datasets (oldest to newest) - only if we have current period data
-        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0 && (hasActualData || hasProjectedData)) {
-            // Sort by period index (oldest first)
-            const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
-            
-            sortedPreviousPeriods.forEach((periodData, index) => {
-                const periodIndex = periodData.periodIndex;
-                const opacity = Math.max(0.15, 0.6 - (periodIndex - 1) * 0.15); // Fade older periods
-                const lineWidth = Math.max(1, 3 - periodIndex); // Thinner lines for older periods
-                
-                // Generate period label
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthName = monthNames[periodData.month];
-                const halfLabel = periodData.isFirstHalf ? '1st' : '2nd';
-                const label = `${monthName} ${periodData.year} (${halfLabel} half)`;
-                
-                datasets.push({
-                    label: label,
-                    data: periodData.actualData,
-                    borderColor: `rgba(108, 117, 125, ${opacity})`, // Gray with varying opacity
-                    backgroundColor: 'transparent',
-                    tension: 0.1,
-                    borderWidth: lineWidth,
-                    pointRadius: 0, // No points for historical data
-                    pointHoverRadius: 0,
-                    spanGaps: true,
-                    order: 10 + periodIndex, // Higher order number = rendered behind
-                    fill: false
+        // Ideal linear spending line
+        const startingBudget = history[0].amount;
+        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
+        const idealLine = [];
+        for (let i = 0; i <= totalDays; i++) {
+            const date = new Date(periodStart);
+            date.setDate(periodStart.getDate() + i);
+            if (date <= new Date()) {
+                idealLine.push({
+                    x: date,
+                    y: startingBudget - (startingBudget / totalDays) * i
                 });
-            });
+            }
         }
         
-        // Add current period datasets (on top) - only if we have data
-        if (hasProjectedData) {
-            datasets.push({
-                label: 'Projected Budget/Day',
-                data: chartData.projectedData,
-                borderColor: '#17a2b8',
-                backgroundColor: 'rgba(23, 162, 184, 0.1)',
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                tension: 0.1,
-                borderWidth: 2,
-                borderDash: [5, 5],
-                pointBackgroundColor: '#17a2b8',
-                fill: false,
-                order: 2 // Rendered on top
-            });
-        }
-        
-        if (hasActualData) {
-            datasets.push({
-                label: 'Actual Budget/Day',
-                data: chartData.actualData,
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                pointRadius: 4,
-                pointHoverRadius: 8,
-                tension: 0.2,
-                borderWidth: 3,
-                pointBackgroundColor: '#28a745',
-                fill: false,
-                order: 1 // Rendered on top
-            });
-        }
-        
-        // If no meaningful data, show a placeholder message
-        if (!hasActualData && !hasProjectedData) {
-            datasets.push({
-                label: 'No budget data for current period',
-                data: [], // Empty data
-                borderColor: '#6c757d',
-                backgroundColor: 'transparent',
-                tension: 0.1,
-                pointRadius: 0,
-                showLine: false,
-                order: 1
-            });
-        }
-        
-        this.charts.budgetPerDayProjectedVsActual = new ChartConstructor(ctx, {
+        this.charts.budgetTimeline = new ChartConstructor(ctx, {
             type: 'line',
             data: {
-                datasets: datasets
+                datasets: [
+                    {
+                        label: 'Ideal Spending',
+                        data: idealLine,
+                        borderColor: 'rgba(108, 117, 125, 0.5)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0
+                    },
+                    {
+                        label: 'Actual Budget',
+                        data: dataPoints,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#28a745',
+                        fill: true,
+                        stepped: 'before'
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
                 plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
-                    },
+                    legend: { labels: { color: '#e9ecef' } },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
-                                const value = context.parsed.y;
-                                return `${context.dataset.label}: ${Math.round(value * 100) / 100} RON/day`;
+                            title: (items) => {
+                                const date = new Date(items[0].parsed.x);
+                                return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
                             },
-                            title: function(tooltipItems) {
-                                const date = new Date(tooltipItems[0].parsed.x);
-                                return date.toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
-                            }
+                            label: (context) => `${context.dataset.label}: ${Math.round(context.parsed.y)} RON`
                         }
                     }
                 },
                 scales: {
                     x: {
                         type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM dd'
-                            }
-                        },
-                        ticks: {
-                            color: function(context) {
-                                // Color weekend days differently
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                // Different grid color for weekend days
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: '#e9ecef'
-                        }
+                        time: { unit: 'day', displayFormats: { day: 'MMM dd' } },
+                        ticks: { color: '#e9ecef' },
+                        grid: { color: 'rgba(233, 236, 239, 0.1)' }
                     },
                     y: {
                         beginAtZero: true,
                         ticks: {
                             color: '#e9ecef',
-                            callback: function(value) {
-                                return Math.round(value * 100) / 100 + ' RON/day';
-                            }
+                            callback: (v) => v + ' RON'
                         },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Budget per Day (RON)',
-                            color: '#e9ecef'
-                        }
+                        grid: { color: 'rgba(233, 236, 239, 0.2)' }
                     }
                 }
             }
@@ -1446,179 +320,110 @@ class ChartService {
     }
 
     /**
-     * Render delta budget (spent) per day chart
+     * Render Pace Gauge Chart - Simple visual showing if on track
      */
-    renderDeltaBudgetPerDayChart() {
-        const ctx = document.getElementById('deltaBudgetPerDayChart');
+    renderPaceGaugeChart() {
+        const ctx = document.getElementById('paceGaugeChart');
         if (!ctx) return;
 
-        // Check if Chart.js is available
         const ChartConstructor = window.Chart || Chart;
-        if (!ChartConstructor) {
-            console.error('Chart.js is not loaded properly');
-            return;
+        if (!ChartConstructor) return;
+
+        if (this.charts.paceGauge) {
+            this.charts.paceGauge.destroy();
         }
 
-        // Destroy existing chart if it exists
-        if (this.charts.deltaBudgetPerDay) {
-            this.charts.deltaBudgetPerDay.destroy();
-        }
-
-        const chartData = this._prepareDeltaBudgetPerDayData();
+        // Calculate pace
+        const periods = this._getSpendingPeriods();
+        let totalDays = 0;
+        let totalSpent = 0;
         
-        // Create datasets starting with historical periods
-        const datasets = [];
+        periods.forEach(p => {
+            if (p.spent > 0) {
+                totalDays += p.days;
+                totalSpent += p.spent;
+            }
+        });
         
-        // Check if we have meaningful data to display
-        const hasCurrentData = chartData.currentPeriodData.length > 0;
+        const actualDailyRate = totalDays > 0 ? totalSpent / totalDays : 0;
         
-        // Add previous periods datasets (oldest to newest) - only if we have current period data
-        if (chartData.previousPeriodsData && chartData.previousPeriodsData.length > 0 && hasCurrentData) {
-            // Sort by period index (oldest first)
-            const sortedPreviousPeriods = chartData.previousPeriodsData.sort((a, b) => b.periodIndex - a.periodIndex);
-            
-            sortedPreviousPeriods.forEach((periodData, index) => {
-                const periodIndex = periodData.periodIndex;
-                const opacity = Math.max(0.15, 0.6 - (periodIndex - 1) * 0.15); // Fade older periods
-                const lineWidth = Math.max(1, 3 - periodIndex); // Thinner lines for older periods
-                
-                // Generate period label
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthName = monthNames[periodData.month];
-                const halfLabel = periodData.isFirstHalf ? '1st' : '2nd';
-                const label = `${monthName} ${periodData.year} (${halfLabel} half)`;
-                
-                datasets.push({
-                    label: label,
-                    data: periodData.deltaData,
-                    borderColor: `rgba(108, 117, 125, ${opacity})`, // Gray with varying opacity
-                    backgroundColor: 'transparent',
-                    tension: 0.1,
-                    borderWidth: lineWidth,
-                    pointRadius: 0, // No points for historical data
-                    pointHoverRadius: 0,
-                    spanGaps: true,
-                    order: 10 + periodIndex, // Higher order number = rendered behind
-                    fill: false
-                });
-            });
-        }
+        // Get target
+        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
+        const nextEndStr = this.dateCalculationService.computeNextEndDay();
+        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
+        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
+        const periodStart = new Date(startYear, startMonth - 1, startDay);
+        const periodEnd = new Date(endYear, endMonth - 1, endDay);
+        const cycleDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
         
-        // Add current period dataset (on top) - only if we have data
-        if (hasCurrentData) {
-            datasets.push({
-                label: 'Delta Budget (Spent) per Day',
-                data: chartData.currentPeriodData,
-                borderColor: '#dc3545',
-                backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                pointRadius: 5,
-                pointHoverRadius: 8,
-                tension: 0.2,
-                borderWidth: 3,
-                pointBackgroundColor: '#dc3545',
-                fill: false,
-                order: 1 // Rendered on top
-            });
+        const budgetHistory = this.databaseService.getBudgetHistory();
+        const currentPeriodHistory = budgetHistory.filter(entry => {
+            const d = new Date(entry.timestamp);
+            return d >= periodStart && d <= periodEnd;
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        const startingBudget = currentPeriodHistory.length > 0 ? currentPeriodHistory[0].amount : 0;
+        const targetDailyRate = cycleDays > 0 ? startingBudget / cycleDays : 0;
+        
+        const pacePercent = targetDailyRate > 0 ? (actualDailyRate / targetDailyRate) * 100 : 0;
+        
+        // Determine status
+        let status, statusColor, advice;
+        if (pacePercent === 0) {
+            status = 'No Data';
+            statusColor = '#6c757d';
+            advice = 'Update your budget to start tracking';
+        } else if (pacePercent < 80) {
+            status = 'Under Budget ✓';
+            statusColor = '#28a745';
+            advice = `Spending ${Math.round(pacePercent)}% of target - great job!`;
+        } else if (pacePercent <= 100) {
+            status = 'On Track ✓';
+            statusColor = '#28a745';
+            advice = `Spending ${Math.round(pacePercent)}% of target - keep it up!`;
+        } else if (pacePercent <= 120) {
+            status = 'Slightly Over ⚠️';
+            statusColor = '#ffc107';
+            advice = `Spending ${Math.round(pacePercent)}% of target - slow down a bit`;
+        } else {
+            status = 'Over Budget 🚨';
+            statusColor = '#dc3545';
+            advice = `Spending ${Math.round(pacePercent)}% of target - reduce spending!`;
         }
         
-        // If no meaningful data, show a placeholder message
-        if (!hasCurrentData) {
-            datasets.push({
-                label: 'No budget change data for current period',
-                data: [], // Empty data
-                borderColor: '#6c757d',
-                backgroundColor: 'transparent',
-                tension: 0.1,
-                pointRadius: 0,
-                showLine: false,
-                order: 1
-            });
-        }
+        // Create gauge-like visualization using doughnut
+        const gaugeValue = Math.min(150, pacePercent); // Cap at 150% for display
+        const remaining = 150 - gaugeValue;
         
-        this.charts.deltaBudgetPerDay = new ChartConstructor(ctx, {
-            type: 'line',
+        this.charts.paceGauge = new ChartConstructor(ctx, {
+            type: 'doughnut',
             data: {
-                datasets: datasets
+                labels: ['Your Pace', 'Remaining'],
+                datasets: [{
+                    data: [gaugeValue, remaining],
+                    backgroundColor: [statusColor, 'rgba(108, 117, 125, 0.2)'],
+                    borderWidth: 0,
+                    circumference: 180,
+                    rotation: 270
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                cutout: '70%',
                 plugins: {
-                    legend: {
-                        labels: {
-                            color: '#e9ecef',
-                            usePointStyle: true
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const value = context.parsed.y;
-                                const sign = value >= 0 ? '+' : '';
-                                return `${context.dataset.label}: ${sign}${Math.round(value * 100) / 100} RON`;
-                            },
-                            title: function(tooltipItems) {
-                                const date = new Date(tooltipItems[0].parsed.x);
-                                return date.toLocaleDateString('en-US', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day',
-                            displayFormats: {
-                                day: 'MMM dd'
-                            }
-                        },
-                        ticks: {
-                            color: function(context) {
-                                // Color weekend days differently
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? '#ff6b6b' : '#e9ecef';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                // Different grid color for weekend days
-                                const timestamp = context.tick.value;
-                                const date = new Date(timestamp);
-                                const dayOfWeek = date.getDay();
-                                return (dayOfWeek === 0 || dayOfWeek === 6) ? 'rgba(255, 107, 107, 0.3)' : 'rgba(233, 236, 239, 0.2)';
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Date',
-                            color: '#e9ecef'
-                        }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#e9ecef',
-                            callback: function(value) {
-                                const sign = value >= 0 ? '+' : '';
-                                return sign + Math.round(value * 100) / 100 + ' RON';
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(233, 236, 239, 0.2)'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Budget Change (RON)',
-                            color: '#e9ecef'
-                        }
+                    legend: { display: false },
+                    tooltip: { enabled: false },
+                    title: {
+                        display: true,
+                        text: [
+                            status,
+                            `${Math.round(actualDailyRate)} RON/day vs ${Math.round(targetDailyRate)} RON/day target`,
+                            advice
+                        ],
+                        color: statusColor,
+                        font: { size: 14, weight: 'bold' },
+                        padding: { top: 10 }
                     }
                 }
             }
@@ -1626,1051 +431,9 @@ class ChartService {
     }
 
     /**
-     * Prepare budget per day projected vs actual chart data
-     * @private
-     * @returns {Object} Chart data
-     */
-    _prepareBudgetPerDayProjectedVsActualData() {
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        const currentBudget = this.databaseService.getCurrentBudget();
-        
-        // Get proper period dates
-        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        
-        // Parse start and end dates
-        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const periodStart = new Date(startYear, startMonth - 1, startDay);
-        const periodEnd = new Date(endYear, endMonth - 1, endDay);
-        
-        // Calculate total days in period
-        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
-        const now = new Date();
-        const todayIndex = Math.floor((now - periodStart) / (1000 * 60 * 60 * 24));
-        
-        const projectedData = [];
-        const actualData = [];
-        
-        // Filter budget history to current period
-        const currentPeriodBudgetHistory = budgetHistory.filter(entry => {
-            const entryDate = new Date(entry.timestamp);
-            entryDate.setHours(0, 0, 0, 0);
-            
-            const periodStartNorm = new Date(periodStart);
-            periodStartNorm.setHours(0, 0, 0, 0);
-            
-            const periodEndNorm = new Date(periodEnd);
-            periodEndNorm.setHours(23, 59, 59, 999);
-            
-            return entryDate >= periodStartNorm && entryDate <= periodEndNorm;
-        });
-        
-        // Create a map for actual budget per day calculations
-        const actualBudgetPerDayMap = new Map();
-        
-        // Calculate actual budget per day for each transaction
-        currentPeriodBudgetHistory.forEach(entry => {
-            const entryDate = new Date(entry.timestamp);
-            const dateKey = entryDate.toISOString().split('T')[0];
-            
-            // Calculate remaining days from this transaction date
-            const remainingDaysFromEntry = this._calculateRemainingDaysForDate(entryDate);
-            const budgetPerDayAtEntry = remainingDaysFromEntry > 0 ? entry.amount / remainingDaysFromEntry : 0;
-            
-            actualBudgetPerDayMap.set(dateKey, {
-                x: entryDate.getTime(),
-                y: budgetPerDayAtEntry,
-                budgetAmount: entry.amount,
-                remainingDays: remainingDaysFromEntry
-            });
-        });
-        
-        // Convert actual data to array
-        Array.from(actualBudgetPerDayMap.values()).forEach(data => {
-            actualData.push({
-                x: data.x,
-                y: data.y
-            });
-        });
-        
-        // Sort actual data by date
-        actualData.sort((a, b) => a.x - b.x);
-        
-        // Calculate projected budget per day for comparison
-        // This shows what the ideal budget per day should have been at each point
-        for (let i = 0; i <= totalDays; i++) {
-            const date = new Date(periodStart);
-            date.setDate(periodStart.getDate() + i);
-            
-            // Skip future dates beyond today
-            if (date > now) continue;
-            
-            const remainingDaysFromThisDate = Math.max(1, totalDays - i);
-            
-            // For projected line, assume the current budget was available from the start
-            // and calculate what the daily rate should have been from each day
-            const projectedBudgetPerDay = currentBudget / remainingDaysFromThisDate;
-            
-            projectedData.push({
-                x: date.getTime(),
-                y: projectedBudgetPerDay
-            });
-        }
-        
-        console.log('Budget Per Day Projected vs Actual Chart Data:', {
-            periodStart: periodStart.toLocaleDateString(),
-            periodEnd: periodEnd.toLocaleDateString(),
-            currentBudget,
-            totalDays,
-            todayIndex,
-            actualDataPoints: actualData.length,
-            projectedDataPoints: projectedData.length,
-            actualValues: actualData.map(d => ({ date: new Date(d.x).toLocaleDateString(), value: d.y })),
-            projectedValues: projectedData.slice(0, 5).map(d => ({ date: new Date(d.x).toLocaleDateString(), value: d.y }))
-        });
-        
-        // Get previous periods data for comparison
-        let previousPeriodsData = [];
-        if (actualData.length > 0 || projectedData.length > 0) {
-            const previousPeriods = this._getPreviousPeriodsData(3);
-            
-            // Transform previous periods to current timeline and calculate budget per day
-            const currentPeriodData = { periodStart, periodEnd };
-            
-            previousPeriods.forEach(prevPeriod => {
-                const previousPeriodBudgetPerDayData = this._calculatePreviousPeriodBudgetPerDay(prevPeriod, currentPeriodData);
-                if (previousPeriodBudgetPerDayData.length > 0) {
-                    previousPeriodsData.push({
-                        actualData: previousPeriodBudgetPerDayData,
-                        periodIndex: prevPeriod.periodIndex,
-                        month: prevPeriod.month,
-                        year: prevPeriod.year,
-                        isFirstHalf: prevPeriod.isFirstHalf
-                    });
-                }
-            });
-        }
-        
-        return {
-            projectedData,
-            actualData,
-            previousPeriodsData
-        };
-    }
-
-    /**
-     * Calculate budget per day data for a previous period and map to current timeline
-     * @private
-     * @param {Object} previousPeriod - Previous period data
-     * @param {Object} currentPeriod - Current period data
-     * @returns {Array} Budget per day data points mapped to current timeline
-     */
-    _calculatePreviousPeriodBudgetPerDay(previousPeriod, currentPeriod) {
-        const { budgetHistory, periodStart: prevStart, periodEnd: prevEnd } = previousPeriod;
-        const { periodStart: currStart, periodEnd: currEnd } = currentPeriod;
-        
-        // Calculate period lengths
-        const prevPeriodDays = Math.ceil((prevEnd - prevStart) / (1000 * 60 * 60 * 24));
-        const currPeriodDays = Math.ceil((currEnd - currStart) / (1000 * 60 * 60 * 24));
-        
-        // Create budget per day data for previous period
-        const prevBudgetPerDayData = [];
-        
-        // Calculate budget per day for each transaction in the previous period
-        budgetHistory.forEach(entry => {
-            const entryDate = new Date(entry.timestamp);
-            const dayIndex = Math.floor((entryDate - prevStart) / (1000 * 60 * 60 * 24));
-            
-            if (dayIndex >= 0 && dayIndex <= prevPeriodDays) {
-                // Calculate remaining days from this transaction date in the previous period
-                const remainingDaysFromEntry = Math.max(1, prevPeriodDays - dayIndex);
-                const budgetPerDayAtEntry = entry.amount / remainingDaysFromEntry;
-                
-                prevBudgetPerDayData.push({
-                    dayIndex: dayIndex,
-                    budgetPerDay: budgetPerDayAtEntry,
-                    timestamp: entryDate.getTime()
-                });
-            }
-        });
-        
-        // Sort by day index
-        prevBudgetPerDayData.sort((a, b) => a.dayIndex - b.dayIndex);
-        
-        // Transform to current period timeline
-        const transformedData = [];
-        
-        prevBudgetPerDayData.forEach(data => {
-            // Map previous period day to current period timeline
-            const progress = data.dayIndex / prevPeriodDays; // 0 to 1
-            const currentDayIndex = Math.floor(progress * currPeriodDays);
-            
-            // Calculate the corresponding date in current period
-            const currentDate = new Date(currStart);
-            currentDate.setDate(currStart.getDate() + currentDayIndex);
-            
-            // Only include if it's not in the future
-            if (currentDate <= new Date()) {
-                transformedData.push({
-                    x: currentDate.getTime(),
-                    y: data.budgetPerDay
-                });
-            }
-        });
-        
-        return transformedData;
-    }
-
-    /**
-     * Prepare delta budget (spent) per day chart data
-     * @private
-     * @returns {Object} Chart data including current period and previous periods
-     */
-    _prepareDeltaBudgetPerDayData() {
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        
-        // Get proper period dates
-        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        
-        // Parse start and end dates
-        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const periodStart = new Date(startYear, startMonth - 1, startDay);
-        const periodEnd = new Date(endYear, endMonth - 1, endDay);
-        
-        // Filter budget history to current period
-        const currentPeriodBudgetHistory = budgetHistory.filter(entry => {
-            const entryDate = new Date(entry.timestamp);
-            entryDate.setHours(0, 0, 0, 0);
-            
-            const periodStartNorm = new Date(periodStart);
-            periodStartNorm.setHours(0, 0, 0, 0);
-            
-            const periodEndNorm = new Date(periodEnd);
-            periodEndNorm.setHours(23, 59, 59, 999);
-            
-            return entryDate >= periodStartNorm && entryDate <= periodEndNorm;
-        });
-        
-        // Sort by timestamp to ensure chronological order
-        currentPeriodBudgetHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        
-        // Calculate delta (spending/changes) between consecutive transactions
-        const currentPeriodData = [];
-        
-        for (let i = 1; i < currentPeriodBudgetHistory.length; i++) {
-            const currentEntry = currentPeriodBudgetHistory[i];
-            const previousEntry = currentPeriodBudgetHistory[i - 1];
-            
-            const delta = currentEntry.amount - previousEntry.amount;
-            const entryDate = new Date(currentEntry.timestamp);
-            
-            // Only add meaningful deltas (not zero changes)
-            if (delta !== 0) {
-                currentPeriodData.push({
-                    x: entryDate.getTime(),
-                    y: delta,
-                    previousAmount: previousEntry.amount,
-                    currentAmount: currentEntry.amount,
-                    action: currentEntry.action
-                });
-            }
-        }
-        
-        // Get previous periods data for comparison
-        let previousPeriodsData = [];
-        if (currentPeriodData.length > 0) {
-            const previousPeriods = this._getPreviousPeriodsData(3);
-            
-            // Calculate delta data for previous periods
-            const currentPeriodInfo = { periodStart, periodEnd };
-            
-            previousPeriods.forEach(prevPeriod => {
-                const previousPeriodDeltaData = this._calculatePreviousPeriodDelta(prevPeriod, currentPeriodInfo);
-                if (previousPeriodDeltaData.length > 0) {
-                    previousPeriodsData.push({
-                        deltaData: previousPeriodDeltaData,
-                        periodIndex: prevPeriod.periodIndex,
-                        month: prevPeriod.month,
-                        year: prevPeriod.year,
-                        isFirstHalf: prevPeriod.isFirstHalf
-                    });
-                }
-            });
-        }
-        
-        console.log('Delta Budget Per Day Chart Data:', {
-            periodStart: periodStart.toLocaleDateString(),
-            periodEnd: periodEnd.toLocaleDateString(),
-            currentPeriodTransactions: currentPeriodBudgetHistory.length,
-            currentPeriodDeltas: currentPeriodData.length,
-            previousPeriods: previousPeriodsData.length,
-            deltaValues: currentPeriodData.map(d => ({ 
-                date: new Date(d.x).toLocaleDateString(), 
-                delta: d.y, 
-                action: d.action 
-            }))
-        });
-        
-        return {
-            currentPeriodData,
-            previousPeriodsData
-        };
-    }
-
-    /**
-     * Calculate delta budget data for a previous period and map to current timeline
-     * @private
-     * @param {Object} previousPeriod - Previous period data
-     * @param {Object} currentPeriod - Current period data
-     * @returns {Array} Delta budget data points mapped to current timeline
-     */
-    _calculatePreviousPeriodDelta(previousPeriod, currentPeriod) {
-        const { budgetHistory, periodStart: prevStart, periodEnd: prevEnd } = previousPeriod;
-        const { periodStart: currStart, periodEnd: currEnd } = currentPeriod;
-        
-        // Calculate period lengths
-        const prevPeriodDays = Math.ceil((prevEnd - prevStart) / (1000 * 60 * 60 * 24));
-        const currPeriodDays = Math.ceil((currEnd - currStart) / (1000 * 60 * 60 * 24));
-        
-        // Sort budget history chronologically
-        const sortedHistory = budgetHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        
-        // Calculate deltas for previous period
-        const prevDeltaData = [];
-        
-        for (let i = 1; i < sortedHistory.length; i++) {
-            const currentEntry = sortedHistory[i];
-            const previousEntry = sortedHistory[i - 1];
-            
-            const delta = currentEntry.amount - previousEntry.amount;
-            
-            if (delta !== 0) {
-                const entryDate = new Date(currentEntry.timestamp);
-                const dayIndex = Math.floor((entryDate - prevStart) / (1000 * 60 * 60 * 24));
-                
-                if (dayIndex >= 0 && dayIndex <= prevPeriodDays) {
-                    prevDeltaData.push({
-                        dayIndex: dayIndex,
-                        delta: delta,
-                        timestamp: entryDate.getTime()
-                    });
-                }
-            }
-        }
-        
-        // Transform to current period timeline
-        const transformedData = [];
-        
-        prevDeltaData.forEach(data => {
-            // Map previous period day to current period timeline
-            const progress = data.dayIndex / prevPeriodDays; // 0 to 1
-            const currentDayIndex = Math.floor(progress * currPeriodDays);
-            
-            // Calculate the corresponding date in current period
-            const currentDate = new Date(currStart);
-            currentDate.setDate(currStart.getDate() + currentDayIndex);
-            
-            // Only include if it's not in the future
-            if (currentDate <= new Date()) {
-                transformedData.push({
-                    x: currentDate.getTime(),
-                    y: data.delta
-                });
-            }
-        });
-        
-        return transformedData;
-    }
-
-    /**
-     * Get previous periods data for burndown comparison
-     * @private
-     * @param {number} periodsCount - Number of previous periods to retrieve (default: 3)
-     * @returns {Array} Array of previous period data
-     */
-    _getPreviousPeriodsData(periodsCount = 3) {
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        const periods = [];
-        
-        // Calculate previous periods
-        for (let i = 1; i <= periodsCount; i++) {
-            const periodData = this._calculatePreviousPeriod(i);
-            if (periodData) {
-                // Filter budget history for this period
-                const periodBudgetHistory = budgetHistory.filter(entry => {
-                    const entryDate = new Date(entry.timestamp);
-                    return entryDate >= periodData.periodStart && entryDate <= periodData.periodEnd;
-                });
-                
-                if (periodBudgetHistory.length > 0) {
-                    periods.push({
-                        ...periodData,
-                        budgetHistory: periodBudgetHistory,
-                        periodIndex: i
-                    });
-                }
-            }
-        }
-        
-        return periods;
-    }
-
-    /**
-     * Calculate period dates for a previous period
-     * @private
-     * @param {number} periodsBack - How many periods back (1 = last period, 2 = two periods ago, etc.)
-     * @returns {Object|null} Period data with start and end dates
-     */
-    _calculatePreviousPeriod(periodsBack) {
-        const now = new Date();
-        const currentDay = now.getDate();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-        
-        // Calculate how many periods to go back from current period
-        let targetMonth = currentMonth;
-        let targetYear = currentYear;
-        let isFirstHalf;
-        
-        // Determine current period position
-        if (currentDay >= CONFIG.PERIODS.SECOND_DAY) {
-            // In second half of current month (25th onwards)
-            isFirstHalf = false;
-        } else if (currentDay >= CONFIG.PERIODS.FIRST_DAY) {
-            // In first half of current month (10th to 24th)
-            isFirstHalf = true;
-        } else {
-            // Before first day (1st to 9th), so we're in previous month's second half
-            isFirstHalf = false;
-            targetMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-            targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-        }
-        
-        // Go back the specified number of periods
-        for (let i = 0; i < periodsBack; i++) {
-            if (isFirstHalf) {
-                // Currently first half, go to previous month's second half
-                targetMonth = targetMonth === 0 ? 11 : targetMonth - 1;
-                targetYear = targetMonth === 11 ? targetYear - 1 : targetYear;
-                isFirstHalf = false;
-            } else {
-                // Currently second half, go to same month's first half
-                isFirstHalf = true;
-            }
-        }
-        
-        // Calculate period start and end dates
-        let periodStart, periodEnd;
-        
-        if (isFirstHalf) {
-            // First half: 10th to 25th
-            periodStart = new Date(targetYear, targetMonth, CONFIG.PERIODS.FIRST_DAY);
-            periodEnd = new Date(targetYear, targetMonth, CONFIG.PERIODS.SECOND_DAY);
-        } else {
-            // Second half: 25th to 10th of next month
-            periodStart = new Date(targetYear, targetMonth, CONFIG.PERIODS.SECOND_DAY);
-            const nextMonth = targetMonth === 11 ? 0 : targetMonth + 1;
-            const nextYear = targetMonth === 11 ? targetYear + 1 : targetYear;
-            periodEnd = new Date(nextYear, nextMonth, CONFIG.PERIODS.FIRST_DAY);
-        }
-        
-        // Adjust for working days
-        const periodStartStr = this.dateCalculationService.findFirstWorkingDayOnOrAfter(periodStart);
-        const periodEndStr = this.dateCalculationService.findFirstWorkingDayOnOrAfter(periodEnd);
-        
-        const [startMonth, startDay, startYear] = periodStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = periodEndStr.split('/').map(Number);
-        
-        return {
-            periodStart: new Date(startYear, startMonth - 1, startDay),
-            periodEnd: new Date(endYear, endMonth - 1, endDay),
-            isFirstHalf,
-            month: targetMonth,
-            year: targetYear
-        };
-    }
-
-    /**
-     * Transform previous period data to current period timeline
-     * @private
-     * @param {Object} previousPeriod - Previous period data
-     * @param {Object} currentPeriod - Current period data
-     * @returns {Array} Transformed budget data aligned to current period
-     */
-    _transformPreviousPeriodToCurrentTimeline(previousPeriod, currentPeriod) {
-        const { budgetHistory, periodStart: prevStart, periodEnd: prevEnd } = previousPeriod;
-        const { periodStart: currStart, periodEnd: currEnd } = currentPeriod;
-        
-        // Calculate period lengths
-        const prevPeriodDays = Math.ceil((prevEnd - prevStart) / (1000 * 60 * 60 * 24));
-        const currPeriodDays = Math.ceil((currEnd - currStart) / (1000 * 60 * 60 * 24));
-        
-        // Create budget data for previous period
-        const prevActual = [];
-        for (let i = 0; i <= prevPeriodDays; i++) {
-            prevActual[i] = null;
-        }
-        
-        // Fill in actual budget data
-        budgetHistory.forEach(entry => {
-            const entryDate = new Date(entry.timestamp);
-            entryDate.setHours(0, 0, 0, 0);
-            
-            const dayIndex = Math.floor((entryDate - prevStart) / (1000 * 60 * 60 * 24));
-            if (dayIndex >= 0 && dayIndex <= prevPeriodDays) {
-                prevActual[dayIndex] = entry.amount;
-            }
-        });
-        
-        // Fill forward missing values
-        let lastKnownValue = null;
-        for (let i = 0; i <= prevPeriodDays; i++) {
-            if (prevActual[i] !== null) {
-                lastKnownValue = prevActual[i];
-            } else if (lastKnownValue !== null) {
-                prevActual[i] = lastKnownValue;
-            }
-        }
-        
-        // Transform to current period timeline (shift so both end at the same point)
-        const transformedData = [];
-        for (let i = 0; i <= currPeriodDays; i++) {
-            // Map current period day to previous period day
-            const progress = i / currPeriodDays; // 0 to 1
-            const prevDayIndex = Math.floor(progress * prevPeriodDays);
-            
-            if (prevDayIndex >= 0 && prevDayIndex < prevActual.length && prevActual[prevDayIndex] !== null) {
-                transformedData[i] = prevActual[prevDayIndex];
-            } else {
-                transformedData[i] = null;
-            }
-        }
-        
-        return transformedData;
-    }
-
-    /**
-     * Prepare budget burndown chart data
-     * @private
-     * @returns {Object} Chart data
-     */
-    _prepareBudgetData() {
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        const currentBudget = this.databaseService.getCurrentBudget();
-        
-        // Get proper period dates
-        const prevStartStr = this.dateCalculationService.computePreviousStartDay();
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        
-        // Parse start and end dates
-        const [startMonth, startDay, startYear] = prevStartStr.split('/').map(Number);
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const periodStart = new Date(startYear, startMonth - 1, startDay);
-        const periodEnd = new Date(endYear, endMonth - 1, endDay);
-        
-        // Calculate total days in period
-        const totalDays = Math.ceil((periodEnd - periodStart) / (1000 * 60 * 60 * 24));
-        const now = new Date();
-        const todayIndex = Math.floor((now - periodStart) / (1000 * 60 * 60 * 24));
-        
-        const labels = [];
-        const projected = [];
-        const actual = [];
-        
-        // Generate dates for the entire period
-        for (let i = 0; i <= totalDays; i++) {
-            const date = new Date(periodStart);
-            date.setDate(periodStart.getDate() + i);
-            labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        }
-
-        // Initialize actual array with nulls
-        for (let i = 0; i <= totalDays; i++) {
-            actual[i] = null;
-        }
-
-        // Filter budget history to only include entries from the current period
-        const currentPeriodBudgetHistory = budgetHistory.filter(entry => {
-            const entryDate = new Date(entry.timestamp);
-            // Normalize all dates to start of day for accurate comparison
-            entryDate.setHours(0, 0, 0, 0);
-            
-            const periodStartNorm = new Date(periodStart);
-            periodStartNorm.setHours(0, 0, 0, 0);
-            
-            const periodEndNorm = new Date(periodEnd);
-            periodEndNorm.setHours(23, 59, 59, 999); // Include the entire end day
-            
-            const isInPeriod = entryDate >= periodStartNorm && entryDate <= periodEndNorm;
-            
-            // Debug logging for each entry
-            console.log('Budget History Entry:', {
-                timestamp: entry.timestamp,
-                entryDate: entryDate.toLocaleDateString(),
-                amount: entry.amount,
-                action: entry.action,
-                periodStart: periodStartNorm.toLocaleDateString(),
-                periodEnd: periodEndNorm.toLocaleDateString(),
-                isInPeriod: isInPeriod
-            });
-            
-            return isInPeriod;
-        });
-
-        // Add actual budget data points from current period history only
-        // For each day, use the LATEST budget transaction amount for that day
-        const dailyBudgetMap = new Map();
-        
-        currentPeriodBudgetHistory.forEach(entry => {
-            const entryDate = new Date(entry.timestamp);
-            entryDate.setHours(0, 0, 0, 0); // Normalize to start of day
-            
-            const dayIndex = Math.floor((entryDate - periodStart) / (1000 * 60 * 60 * 24));
-            const dateKey = entryDate.toISOString().split('T')[0];
-            
-            console.log('Processing budget entry:', {
-                timestamp: entry.timestamp,
-                entryDate: entryDate.toLocaleDateString(),
-                amount: entry.amount,
-                action: entry.action,
-                dayIndex: dayIndex,
-                dateKey: dateKey
-            });
-            
-            if (dayIndex >= 0 && dayIndex <= totalDays) {
-                // Keep track of the latest (highest ID) transaction for each day
-                if (!dailyBudgetMap.has(dayIndex) || entry.id > dailyBudgetMap.get(dayIndex).id) {
-                    dailyBudgetMap.set(dayIndex, {
-                        amount: entry.amount,
-                        id: entry.id,
-                        timestamp: entry.timestamp,
-                        dayIndex: dayIndex
-                    });
-                }
-            }
-        });
-        
-        // Set the actual values using the latest transaction for each day
-        dailyBudgetMap.forEach((data, dayIndex) => {
-            actual[dayIndex] = data.amount;
-            console.log(`Set actual[${dayIndex}] = ${data.amount} (latest transaction: ID ${data.id})`);
-        });
-
-        // Don't automatically add today's budget as a data point unless there was an actual transaction today
-        // The chart should only show actual budget transactions from the database
-
-        // Create projected line - only show meaningful projections
-        const remainingDays = Math.max(1, totalDays - todayIndex);
-        
-        // Check if we have any actual budget transactions in the current period
-        const hasCurrentPeriodData = currentPeriodBudgetHistory.length > 0;
-        
-        if (hasCurrentPeriodData && todayIndex >= 0 && todayIndex <= totalDays && currentBudget > 0) {
-            const dailySpendRate = currentBudget / remainingDays;
-            
-            // Find the last actual budget transaction to start projection from
-            let lastTransactionIndex = -1;
-            let lastTransactionAmount = currentBudget;
-            
-            for (let i = todayIndex; i >= 0; i--) {
-                if (actual[i] !== null) {
-                    lastTransactionIndex = i;
-                    lastTransactionAmount = actual[i];
-                    break;
-                }
-            }
-            
-            // Only show forward projection from the last transaction date or today, whichever is later
-            const projectionStartIndex = Math.max(lastTransactionIndex, todayIndex);
-            
-            for (let i = 0; i <= totalDays; i++) {
-                if (i >= projectionStartIndex) {
-                    // Forward projection: linear spending to zero from current budget
-                    const daysFromProjectionStart = i - todayIndex;
-                    projected[i] = Math.max(0, currentBudget - (dailySpendRate * daysFromProjectionStart));
-                } else {
-                    // No backward projection - only show actual data
-                    projected[i] = null;
-                }
-            }
-        } else {
-            // No meaningful data - don't show projections
-            for (let i = 0; i <= totalDays; i++) {
-                projected[i] = null;
-            }
-        }
-
-        // Fill forward actual values from the last known transaction
-        // This ensures that budget amounts persist after the transaction date
-        let lastKnownValue = null;
-        let lastTransactionIndex = -1;
-        
-        // Find the most recent actual transaction
-        for (let i = 0; i <= totalDays; i++) {
-            if (actual[i] !== null) {
-                lastKnownValue = actual[i];
-                lastTransactionIndex = i;
-            }
-        }
-        
-        // Fill forward from the last transaction to today (or end of period if past today)
-        if (lastKnownValue !== null && lastTransactionIndex >= 0) {
-            const fillEndIndex = Math.min(totalDays, Math.max(todayIndex, lastTransactionIndex));
-            
-            console.log('Forward filling budget data:', {
-                lastKnownValue,
-                lastTransactionIndex,
-                todayIndex,
-                fillEndIndex,
-                totalDays
-            });
-            
-            for (let i = lastTransactionIndex; i <= fillEndIndex; i++) {
-                if (actual[i] === null) {
-                    actual[i] = lastKnownValue;
-                    console.log(`Forward filled actual[${i}] = ${lastKnownValue}`);
-                }
-            }
-        }
-
-        // Get previous periods data only if we have current period data
-        let previousPeriodsData = [];
-        if (hasCurrentPeriodData) {
-            const previousPeriods = this._getPreviousPeriodsData(3);
-            
-            // Transform previous periods to current timeline
-            const currentPeriodData = { periodStart, periodEnd };
-            
-            previousPeriods.forEach(prevPeriod => {
-                const transformedData = this._transformPreviousPeriodToCurrentTimeline(prevPeriod, currentPeriodData);
-                previousPeriodsData.push({
-                    data: transformedData,
-                    periodIndex: prevPeriod.periodIndex,
-                    month: prevPeriod.month,
-                    year: prevPeriod.year,
-                    isFirstHalf: prevPeriod.isFirstHalf
-                });
-            });
-        }
-
-        // Debug logging
-        console.log('Budget Chart Data:', {
-            totalDays,
-            todayIndex,
-            currentBudget,
-            periodStart: periodStart.toLocaleDateString(),
-            periodEnd: periodEnd.toLocaleDateString(),
-            currentPeriodHistoryEntries: currentPeriodBudgetHistory.length,
-            currentPeriodHistoryDates: currentPeriodBudgetHistory.map(entry => ({
-                date: new Date(entry.timestamp).toLocaleDateString(),
-                amount: entry.amount,
-                action: entry.action
-            })),
-            hasCurrentPeriodData,
-            actualDataPoints: actual.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
-            projectedDataPoints: projected.map((val, idx) => ({ day: idx, value: val })).filter(item => item.value !== null),
-            previousPeriods: previousPeriodsData.length
-        });
-
-        return { labels, projected, actual, periodStart, previousPeriodsData };
-    }
-
-    /**
-     * Prepare daily trends chart data
-     * @private
-     * @returns {Object} Chart data
-     */
-    _prepareTrendsData() {
-        const logs = this.databaseService.getLogs();
-        const earlyStarts = [];
-        const pageReloads = [];
-        
-        // Create a map to track unique early starts per day
-        const earlyStartMap = new Map();
-        
-        logs.forEach(log => {
-            const timestamp = new Date(log.timestamp);
-            
-            // Create date key for grouping by day (YYYY-MM-DD format)
-            const dateKey = timestamp.toISOString().split('T')[0];
-            const dateValue = new Date(dateKey + 'T00:00:00.000Z');
-            
-            if (log.message.includes('Started day early') || log.message.includes('Day started early')) {
-                // For early starts, use the actual time as Y value
-                const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
-                
-                // Only keep the earliest start time for each day
-                if (!earlyStartMap.has(dateKey) || timeInMinutes < earlyStartMap.get(dateKey).timeInMinutes) {
-                    earlyStartMap.set(dateKey, {
-                        x: dateValue.getTime(),
-                        y: timeInMinutes,
-                        timeInMinutes: timeInMinutes,
-                        originalTimestamp: timestamp
-                    });
-                }
-            } else if (log.message.includes('Page reloaded')) {
-                // For page reloads, show all occurrences
-                const timeInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
-                pageReloads.push({
-                    x: dateValue.getTime(),
-                    y: timeInMinutes,
-                    originalTimestamp: timestamp
-                });
-            }
-        });
-
-        // Convert early starts map to array
-        earlyStartMap.forEach(value => {
-            earlyStarts.push({
-                x: value.x,
-                y: value.y
-            });
-        });
-
-        return { earlyStarts, pageReloads };
-    }
-
-    /**
-     * Prepare budget per day trends chart data with smoothing and trend analysis
-     * @private
-     * @returns {Object} Chart data
-     */
-    _prepareBudgetPerDayTrendsData() {
-        const logs = this.databaseService.getLogs();
-        const budgetHistory = this.databaseService.getBudgetHistory();
-        
-        // Extract budget per day calculations from logs and budget history
-        const budgetPerDayData = [];
-        const budgetPerDayMap = new Map();
-        
-        // Method 1: Extract from logs that contain budget per day mentions
-        logs.forEach(log => {
-            const timestamp = new Date(log.timestamp);
-            const dateKey = timestamp.toISOString().split('T')[0];
-            
-            // Look for budget-related log entries
-            if (log.message.includes('Budget') && log.message.includes('RON')) {
-                // Try to extract budget amount from log message
-                const budgetMatch = log.message.match(/(\d+(?:\.\d+)?)\s*RON/);
-                if (budgetMatch) {
-                    const budgetAmount = parseFloat(budgetMatch[1]);
-                    
-                    // Calculate budget per day for this timestamp
-                    const remainingDays = this._calculateRemainingDaysForDate(timestamp);
-                    const budgetPerDay = remainingDays > 0 ? budgetAmount / remainingDays : 0;
-                    
-                    if (budgetPerDay > 0) {
-                        budgetPerDayMap.set(dateKey, {
-                            x: timestamp.getTime(),
-                            y: budgetPerDay,
-                            date: timestamp
-                        });
-                    }
-                }
-            }
-        });
-        
-        // Method 2: Calculate from budget history
-        budgetHistory.forEach(entry => {
-            const timestamp = new Date(entry.timestamp);
-            const dateKey = timestamp.toISOString().split('T')[0];
-            
-            if (!budgetPerDayMap.has(dateKey)) {
-                const remainingDays = this._calculateRemainingDaysForDate(timestamp);
-                const budgetPerDay = remainingDays > 0 ? entry.amount / remainingDays : 0;
-                
-                if (budgetPerDay > 0) {
-                    budgetPerDayMap.set(dateKey, {
-                        x: timestamp.getTime(),
-                        y: budgetPerDay,
-                        date: timestamp
-                    });
-                }
-            }
-        });
-        
-        // Method 3: Add today's current budget per day calculation
-        const currentBudget = this.databaseService.getCurrentBudget();
-        const currentRemainingDays = this.dateCalculationService.computeRemainingDaysUntilNextEnd();
-        const currentBudgetPerDay = currentRemainingDays > 0 ? currentBudget / currentRemainingDays : 0;
-        
-        if (currentBudgetPerDay > 0) {
-            const today = new Date();
-            const todayKey = today.toISOString().split('T')[0];
-            
-            // Always add/update today's data to ensure current budget per day is shown
-            budgetPerDayMap.set(todayKey, {
-                x: today.getTime(),
-                y: currentBudgetPerDay,
-                date: today
-            });
-        }
-        
-        // Convert map to sorted array
-        const rawDataPoints = Array.from(budgetPerDayMap.values()).sort((a, b) => a.x - b.x);
-        
-        // Generate smoothed data using 7-day moving average
-        const smoothedDataPoints = this._calculateMovingAverage(rawDataPoints, 7);
-        
-        // Calculate trend line using linear regression
-        const trendLinePoints = this._calculateTrendLine(rawDataPoints);
-        
-        return {
-            rawData: rawDataPoints,
-            smoothedData: smoothedDataPoints,
-            trendLine: trendLinePoints
-        };
-    }
-
-    /**
-     * Calculate remaining days for a specific date
-     * @private
-     * @param {Date} date - The date to calculate for
-     * @returns {number} Remaining days
-     */
-    _calculateRemainingDaysForDate(date) {
-        // Use the same logic as DateCalculationService but for a specific date
-        const nextEndStr = this.dateCalculationService.computeNextEndDay();
-        const [endMonth, endDay, endYear] = nextEndStr.split('/').map(Number);
-        const endDate = new Date(endYear, endMonth - 1, endDay);
-        
-        const daysDiff = Math.ceil((endDate - date) / (1000 * 60 * 60 * 24));
-        return Math.max(0, daysDiff);
-    }
-
-    /**
-     * Calculate moving average for smoothing
-     * @private
-     * @param {Array} dataPoints - Array of data points {x, y}
-     * @param {number} windowSize - Size of moving average window
-     * @returns {Array} Smoothed data points
-     */
-    _calculateMovingAverage(dataPoints, windowSize = 7) {
-        if (dataPoints.length < windowSize) return dataPoints;
-        
-        const smoothedData = [];
-        
-        for (let i = 0; i < dataPoints.length; i++) {
-            const start = Math.max(0, i - Math.floor(windowSize / 2));
-            const end = Math.min(dataPoints.length, start + windowSize);
-            
-            const windowData = dataPoints.slice(start, end);
-            const average = windowData.reduce((sum, point) => sum + point.y, 0) / windowData.length;
-            
-            smoothedData.push({
-                x: dataPoints[i].x,
-                y: average
-            });
-        }
-        
-        return smoothedData;
-    }
-
-    /**
-     * Calculate trend line using linear regression
-     * @private
-     * @param {Array} dataPoints - Array of data points {x, y}
-     * @returns {Array} Trend line points
-     */
-    _calculateTrendLine(dataPoints) {
-        if (dataPoints.length < 2) return [];
-        
-        const n = dataPoints.length;
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        
-        // Convert timestamps to days for easier calculation
-        const firstTimestamp = dataPoints[0].x;
-        
-        dataPoints.forEach(point => {
-            const x = (point.x - firstTimestamp) / (1000 * 60 * 60 * 24); // Convert to days
-            const y = point.y;
-            
-            sumX += x;
-            sumY += y;
-            sumXY += x * y;
-            sumXX += x * x;
-        });
-        
-        // Calculate linear regression coefficients
-        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-        const intercept = (sumY - slope * sumX) / n;
-        
-        // Generate trend line points
-        const trendPoints = [];
-        const startX = (dataPoints[0].x - firstTimestamp) / (1000 * 60 * 60 * 24);
-        const endX = (dataPoints[dataPoints.length - 1].x - firstTimestamp) / (1000 * 60 * 60 * 24);
-        
-        trendPoints.push({
-            x: dataPoints[0].x,
-            y: slope * startX + intercept
-        });
-        
-        trendPoints.push({
-            x: dataPoints[dataPoints.length - 1].x,
-            y: slope * endX + intercept
-        });
-        
-        return trendPoints;
-    }
-
-    /**
-     * Update charts with new data
+     * Update all charts
      */
     updateCharts() {
-        // Update new CharTs
-        if (this.charts.budgetHealth) {
-            this.renderBudgetHealthDashboard();
-        }
-        
-        if (this.charts.spendingVelocity) {
-            this.renderSpendingVelocity();
-        }
-        
-        if (this.charts.dailyActivity) {
-            this.renderDailyActivityTimeline();
-        }
-        
-        // Legacy chart support (if still in use)
-        if (this.charts.budget) {
-            this.renderBudgetChart();
-        }
-
-        if (this.charts.trends) {
-            const trendsData = this._prepareTrendsData();
-            this.charts.trends.data.datasets[0].data = trendsData.earlyStarts;
-            this.charts.trends.data.datasets[1].data = trendsData.pageReloads;
-            this.charts.trends.update();
-        }
-
-        if (this.charts.budgetPerDayTrends) {
-            const budgetPerDayData = this._prepareBudgetPerDayTrendsData();
-            this.charts.budgetPerDayTrends.data.datasets[0].data = budgetPerDayData.rawData;
-            this.charts.budgetPerDayTrends.data.datasets[1].data = budgetPerDayData.smoothedData;
-            this.charts.budgetPerDayTrends.data.datasets[2].data = budgetPerDayData.trendLine;
-            this.charts.budgetPerDayTrends.update();
-        }
-
-        if (this.charts.budgetPerDayProjectedVsActual) {
-            this.renderBudgetPerDayProjectedVsActualChart();
-        }
-
-        if (this.charts.deltaBudgetPerDay) {
-            this.renderDeltaBudgetPerDayChart();
-        }
-    }
-
-    /**
-     * Cleanup charts on application cleanup
-     */
-    cleanup() {
-        Object.values(this.charts).forEach(chart => {
-            if (chart) {
-                chart.destroy();
-            }
-        });
-        this.charts = {};
+        this.initializeCharts();
     }
 }

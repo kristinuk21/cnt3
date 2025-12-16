@@ -253,17 +253,24 @@ class TabController {
         // Get and update spending statistics if service is available
         if (this.statisticsService) {
             const stats = this.statisticsService.getCurrentPeriodStatistics();
-            const formattedStats = this.statisticsService.formatForDisplay(stats);
+            const formatted = this.statisticsService.formatForDisplay(stats);
             
-            // Merge statistics data with formatted display strings
+            // Combine raw stats with formatted display strings
             const statsForDisplay = {
-                startingBudget: formattedStats.startingBudget,
-                totalSpent: formattedStats.totalSpent,
-                avgSpendingPerDay: formattedStats.avgSpendingPerDay,
-                spendingPace: formattedStats.spendingPace,
-                budgetDuration: formattedStats.budgetDuration,
-                forecastEndDate: formattedStats.forecastEndDate,
-                advice: stats.advice
+                // Formatted strings for display
+                startingBudget: formatted.startingBudget,
+                totalSpent: formatted.totalSpent,
+                weightedDailyRate: formatted.weightedDailyRate,
+                targetDailyRate: formatted.targetDailyRate,
+                pacePercent: formatted.pacePercent,
+                forecastDays: formatted.forecastDays,
+                forecastDate: formatted.forecastDate,
+                bestPeriod: formatted.bestPeriod,
+                worstPeriod: formatted.worstPeriod,
+                advice: formatted.advice,
+                // Raw values for logic
+                status: stats.status,
+                updateCount: stats.updateCount
             };
             
             this.uiService.updateSpendingStatistics(statsForDisplay);
