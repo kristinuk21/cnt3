@@ -83,4 +83,46 @@ class ButtonController {
         this.databaseService.addLog(CONFIG.MESSAGES.INFO.LOGS_RESET);
         this.tabController.handleLogsTabShown(); // Refresh logs display
     }
+
+    /**
+     * Handle set countdown button click
+     */
+    handleSetCountdown() {
+        const dateInput = document.getElementById('countdownDateInput');
+        const labelInput = document.getElementById('countdownLabelInput');
+        
+        if (!dateInput || !dateInput.value) {
+            this.uiService.showAlert('Please select a target date', 'warning');
+            return;
+        }
+        
+        const targetDate = dateInput.value;
+        const label = labelInput?.value?.trim() || 'Countdown';
+        
+        // Validate that date is in the future
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const target = new Date(targetDate);
+        target.setHours(0, 0, 0, 0);
+        
+        if (target <= now) {
+            this.uiService.showAlert('Target date must be in the future', 'warning');
+            return;
+        }
+        
+        this.databaseService.setCountdown(targetDate, label);
+        this.modalController._updateCountdownModalContent();
+        this.tabController.updateHomeTab();
+        this.uiService.showAlert('Countdown set successfully!', 'success');
+    }
+
+    /**
+     * Handle clear countdown button click
+     */
+    handleClearCountdown() {
+        this.databaseService.clearCountdown();
+        this.modalController._updateCountdownModalContent();
+        this.tabController.updateHomeTab();
+        this.uiService.showAlert('Countdown cleared', 'info');
+    }
 }

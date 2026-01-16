@@ -124,7 +124,8 @@ class UIService {
             // Modal elements
             breakModal: document.getElementById('breakModal'),
             budgetModal: document.getElementById('budgetModal'),
-            tasksModal: document.getElementById('tasksModal')
+            tasksModal: document.getElementById('tasksModal'),
+            countdownModal: document.getElementById('countdownModal')
         };
     }
 
@@ -426,6 +427,59 @@ class UIService {
         if (!this.elements.tasksModal) return;
         const modal = new bootstrap.Modal(this.elements.tasksModal);
         modal.show();
+    }
+
+    /**
+     * Show countdown modal
+     */
+    showCountdownModal() {
+        if (!this.elements.countdownModal) return;
+        const modal = new bootstrap.Modal(this.elements.countdownModal);
+        modal.show();
+    }
+
+    /**
+     * Update the Countdown modal with current countdown information
+     * @param {Object} data - Countdown data
+     */
+    updateCountdownModal(data) {
+        const container = document.getElementById('countdownModalContent');
+        const dateInput = document.getElementById('countdownDateInput');
+        const labelInput = document.getElementById('countdownLabelInput');
+        
+        if (!container) return;
+
+        // Update the input fields with current countdown data
+        if (dateInput && data.targetDate) {
+            // Format date as YYYY-MM-DD for input
+            const date = new Date(data.targetDate);
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+        } else if (dateInput) {
+            dateInput.value = '';
+        }
+        
+        if (labelInput) {
+            labelInput.value = data.label || 'Countdown';
+        }
+
+        let html = '';
+        
+        if (data.hasTarget) {
+            html += `<div class="mb-3">
+                <div class="mb-2"><strong>Target Date:</strong> ${data.targetDateFormatted}</div>
+                <div class="mb-2"><strong>Days Remaining:</strong> ${data.daysRemaining} day${data.daysRemaining === 1 ? '' : 's'}</div>
+                <div class="mb-2"><strong>Progress:</strong> ${data.progress}%</div>
+            </div>`;
+        } else {
+            html += `<div class="mb-3 text-muted">
+                <em>No countdown set. Enter a target date above to start counting down.</em>
+            </div>`;
+        }
+
+        container.innerHTML = html;
     }
 
     /**

@@ -129,7 +129,6 @@
     function getProgressData() {
         const app = window.applicationController || window.app;
         if (!app?.services?.progressCalculation || !app?.services?.database) {
-            console.warn('Required services not available');
             return {
                 home: { progress: 0, endDate: '', remainingDays: 0, budgetPerDay: 0 },
                 today: { 
@@ -140,7 +139,8 @@
                     isBeforeHours: false,
                     isAfterHours: false 
                 },
-                tasks: { total: 0, completed: 0, remaining: 0, percentage: 0 }
+                tasks: { total: 0, completed: 0, remaining: 0, percentage: 0 },
+                countdown: { daysRemaining: 0, targetDate: null, targetDateFormatted: '', label: 'Countdown', progress: 0, hasTarget: false }
             };
         }
         
@@ -149,11 +149,13 @@
         const homeProgressData = progressService.getHomeProgressData();
         const todayProgressData = progressService.getTodayProgressData();
         const taskStats = databaseService.getTaskStats();
+        const countdownData = progressService.getCountdownProgressData();
         
         return {
             home: homeProgressData,
             today: todayProgressData,
-            tasks: taskStats
+            tasks: taskStats,
+            countdown: countdownData
         };
     }
 

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content=     <script src="assets/chart-umd.min.js?v=20250829"></script>Progress Tracker - A web-based application for managing work hours, breaks, and daily progress tracking">
+    <meta name="description" content=     <script src="assets/chart-umd.min.js?v=20260116"></script>Progress Tracker - A web-based application for managing work hours, breaks, and daily progress tracking">
     <meta name="keywords" content="progress tracker, work hours, time management, productivity, break tracking">
     <meta name="author" content="Progress Tracker">
     <title>ProgressTracker</title>
-    <link rel="stylesheet" href="assets/bootstrap.min.css?v=20250829">
-    <link rel="stylesheet" href="css/custom.css?v=20250829">
+    <link rel="stylesheet" href="assets/bootstrap.min.css?v=20260116">
+    <link rel="stylesheet" href="css/custom.css?v=20260116">
 </head>
 <body class="bg-dark">
     <div class="container mt-5 px-2 px-md-5">
@@ -305,50 +305,78 @@
                 </div>
             </div>
         </div>
+
+        <!-- Countdown Modal -->
+        <div class="modal fade" id="countdownModal" tabindex="-1" aria-labelledby="countdownModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content bg-dark text-light custom-modal-content">
+                    <div class="modal-header border-secondary">
+                        <h5 class="modal-title" id="countdownModalLabel">Countdown</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="countdownLabelInput" class="form-label">Label</label>
+                            <input type="text" class="form-control bg-secondary text-light border-secondary" id="countdownLabelInput" placeholder="e.g., Vacation, Deadline..." maxlength="50">
+                        </div>
+                        <div class="mb-3">
+                            <label for="countdownDateInput" class="form-label">Target Date</label>
+                            <input type="date" class="form-control bg-secondary text-light border-secondary" id="countdownDateInput">
+                        </div>
+                        <div class="d-flex gap-2 mb-4">
+                            <button id="setCountdownBtn" class="btn btn-success flex-fill">Set Countdown</button>
+                            <button id="clearCountdownBtn" class="btn btn-danger flex-fill">Clear</button>
+                        </div>
+                        <div id="countdownModalContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <!-- Core Dependencies -->
-    <script src="assets/bootstrap.bundle.min.js?v=20250829"></script>
-    <script src="assets/sql-wasm.js?v=20250829" defer></script>
-    <script src="assets/chart-umd.min.js?v=20250829"></script>
-    <script src="assets/chartjs-adapter-date-fns.bundle.min.js?v=20250829"></script>
+    <script src="assets/bootstrap.bundle.min.js?v=20260116"></script>
+    <script src="assets/sql-wasm.js?v=20260116" defer></script>
+    <script src="assets/chart-umd.min.js?v=20260116"></script>
+    <script src="assets/chartjs-adapter-date-fns.bundle.min.js?v=20260116"></script>
     
     <!-- React Dependencies -->
-    <script src="assets/react.development.js?v=20250829"></script>
-    <script src="assets/react-dom.development.js?v=20250829"></script>
-    <script src="assets/babel.min.js?v=20250829"></script>
+    <script src="assets/react.development.js?v=20260116"></script>
+    <script src="assets/react-dom.development.js?v=20260116"></script>
+    <script src="assets/babel.min.js?v=20260116"></script>
     
     <!-- Constants and Configuration -->
-    <script src="js/config.js?v=20250829"></script>
+    <script src="js/config.js?v=20260116"></script>
     
     <!-- Services -->
-    <script src="js/services/UtilsService.js?v=20250829"></script>
-    <script src="js/services/DatabaseService.js?v=20250829"></script>
-    <script src="js/services/DateCalculationService.js?v=20250829"></script>
-    <script src="js/services/ProgressCalculationService.js?v=20250829"></script>
-    <script src="js/services/StatisticsService.js?v=20250829"></script>
-    <script src="js/services/NotificationService.js?v=20250829"></script>
-    <script src="js/services/UIService.js?v=20250829"></script>
-    <script src="js/services/EventService.js?v=20250829"></script>
-    <script src="js/services/ChartService.js?v=20250829"></script>
-    <script src="js/services/CHistoryService.js?v=20250829"></script>
+    <script src="js/services/UtilsService.js?v=20260116"></script>
+    <script src="js/services/DatabaseService.js?v=20260116"></script>
+    <script src="js/services/DateCalculationService.js?v=20260116"></script>
+    <script src="js/services/ProgressCalculationService.js?v=20260116"></script>
+    <script src="js/services/StatisticsService.js?v=20260116"></script>
+    <script src="js/services/NotificationService.js?v=20260116"></script>
+    <script src="js/services/UIService.js?v=20260116"></script>
+    <script src="js/services/EventService.js?v=20260116"></script>
+    <script src="js/services/ChartService.js?v=20260116"></script>
+    <script src="js/services/CHistoryService.js?v=20260116"></script>
     
     <!-- React Components -->
-    <script type="text/babel" data-presets="react" src="js/components/HomeProgressBar.jsx?v=20250829"></script>
-    <script type="text/babel" data-presets="react" src="js/components/TodayProgressBar.jsx?v=20250829"></script>
-    <script type="text/babel" data-presets="react" src="js/components/TasksProgressBar.jsx?v=20250829"></script>
-    <script type="text/babel" data-presets="react" src="js/components/ProgressBarRoot.jsx?v=20250829"></script>
+    <script type="text/babel" data-presets="react" src="js/components/HomeProgressBar.jsx?v=20260116"></script>
+    <script type="text/babel" data-presets="react" src="js/components/TodayProgressBar.jsx?v=20260116"></script>
+    <script type="text/babel" data-presets="react" src="js/components/TasksProgressBar.jsx?v=20260116"></script>
+    <script type="text/babel" data-presets="react" src="js/components/CountdownProgressBar.jsx?v=20260116"></script>
+    <script type="text/babel" data-presets="react" src="js/components/ProgressBarRoot.jsx?v=20260116"></script>
 
     <!-- Controllers -->
-    <script src="js/controllers/TabController.js?v=20250829"></script>
-    <script src="js/controllers/ProgressController.js?v=20250829"></script>
-    <script src="js/controllers/ButtonController.js?v=20250829"></script>
-    <script src="js/controllers/ModalController.js?v=20250829"></script>
-    <script src="js/controllers/BudgetController.js?v=20250829"></script>
-    <script src="js/controllers/TaskController.js?v=20250829"></script>
-    <script src="js/controllers/ApplicationController.js?v=20250829"></script>
+    <script src="js/controllers/TabController.js?v=20260116"></script>
+    <script src="js/controllers/ProgressController.js?v=20260116"></script>
+    <script src="js/controllers/ButtonController.js?v=20260116"></script>
+    <script src="js/controllers/ModalController.js?v=20260116"></script>
+    <script src="js/controllers/BudgetController.js?v=20260116"></script>
+    <script src="js/controllers/TaskController.js?v=20260116"></script>
+    <script src="js/controllers/ApplicationController.js?v=20260116"></script>
     
     <!-- Progress Bar Helpers and Main Application -->
-    <script src="js/progressBarHelpers.js?v=20250829"></script>
-    <script src="js/main.js?v=20250829"></script>
+    <script src="js/progressBarHelpers.js?v=20260116"></script>
+    <script src="js/main.js?v=20260116"></script>
 </body>
 </html>

@@ -111,6 +111,10 @@ class EventService {
                 buttonController.handleResetLogs();
             } else if (target.id === 'resetDayBtn') {
                 buttonController.handleResetDay();
+            } else if (target.id === 'setCountdownBtn') {
+                buttonController.handleSetCountdown();
+            } else if (target.id === 'clearCountdownBtn') {
+                buttonController.handleClearCountdown();
             }
         });
     }

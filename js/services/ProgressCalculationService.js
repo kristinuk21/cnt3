@@ -218,6 +218,52 @@ class ProgressCalculationService {
     }
 
     /**
+     * Get countdown progress data
+     * @returns {Object} Countdown progress data
+     */
+    getCountdownProgressData() {
+        const countdown = this.databaseService.getCountdown();
+        
+        if (!countdown || !countdown.target_date) {
+            return {
+                daysRemaining: 0,
+                targetDate: null,
+                targetDateFormatted: '',
+                label: 'Countdown',
+                progress: 0,
+                hasTarget: false
+            };
+        }
+        
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        
+        const targetDate = new Date(countdown.target_date);
+        targetDate.setHours(0, 0, 0, 0);
+        
+        const createdDate = new Date(countdown.created_at);
+        createdDate.setHours(0, 0, 0, 0);
+        
+        const totalDays = Math.ceil((targetDate - createdDate) / (1000 * 60 * 60 * 24));
+        const daysRemaining = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
+        const daysPassed = totalDays - daysRemaining;
+        
+        // Progress is percentage of time passed (inverse - we're counting down)
+        const progress = totalDays > 0 ? Math.min(100, Math.max(0, Math.round((daysPassed / totalDays) * 100))) : 0;
+        
+        return {
+            daysRemaining: Math.max(0, daysRemaining),
+            targetDate: targetDate,
+            targetDateFormatted: this.dateService.formatDateForDisplay(targetDate),
+            label: countdown.label || 'Countdown',
+            progress: progress,
+            hasTarget: true,
+            totalDays: totalDays,
+            daysPassed: daysPassed
+        };
+    }
+
+    /**
      * Get today's breaks
      * @private
      * @returns {Array} Array of today's breaks

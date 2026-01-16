@@ -26,6 +26,14 @@ class ModalController {
     }
 
     /**
+     * Show countdown modal and update its content
+     */
+    showCountdownModal() {
+        this._updateCountdownModalContent();
+        this.uiService.showCountdownModal();
+    }
+
+    /**
      * Handle modal show event
      */
     handleModalShow() {
@@ -99,6 +107,23 @@ class ModalController {
                 currentBudget: 0,
                 remainingDays: 0,
                 budgetPerDay: 0
+            });
+        }
+    }
+
+    /**
+     * Update countdown modal content
+     */
+    _updateCountdownModalContent() {
+        try {
+            const countdownData = this.progressCalculationService.getCountdownProgressData();
+            this.uiService.updateCountdownModal(countdownData);
+        } catch (error) {
+            console.error('Error updating countdown modal content:', error);
+            this.uiService.updateCountdownModal({
+                hasTarget: false,
+                daysRemaining: 0,
+                label: 'Countdown'
             });
         }
     }

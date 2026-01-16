@@ -153,6 +153,12 @@ class DatabaseService {
         } catch (e) {
             this.db.run("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT, completed INTEGER DEFAULT 0, timestamp TEXT)");
         }
+        // Check for countdowns table
+        try {
+            this.db.exec("SELECT 1 FROM countdowns LIMIT 1");
+        } catch (e) {
+            this.db.run("CREATE TABLE IF NOT EXISTS countdowns (id INTEGER PRIMARY KEY AUTOINCREMENT, target_date TEXT, label TEXT, created_at TEXT)");
+        }
         this._saveDatabase();
     }
 
@@ -162,6 +168,7 @@ class DatabaseService {
         this.db.run("CREATE TABLE IF NOT EXISTS early_starts (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT)");
         this.db.run("CREATE TABLE IF NOT EXISTS budgets (id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL DEFAULT 0, timestamp TEXT, action TEXT)");
         this.db.run("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT, completed INTEGER DEFAULT 0, timestamp TEXT)");
+        this.db.run("CREATE TABLE IF NOT EXISTS countdowns (id INTEGER PRIMARY KEY AUTOINCREMENT, target_date TEXT, label TEXT, created_at TEXT)");
     }
 
     _saveDatabase() {
@@ -471,5 +478,34 @@ class DatabaseService {
             console.error('Error getting last inserted task ID:', error);
             return null;
         }
+    }
+
+    // Countdown operations
+    setCountdown(targetDate, label = 'Countdown') {
+        if (!this.db) return;
+        const createdAt = new Date().toISOString();
+        // Clear existing countdown and set new one (only one countdown at a time)
+        this.db.run("DELETE FROM countdowns");
+        this.db.run("INSERT INTO countdowns (target_date, label, created_at) VALUES (?, ?, ?)", [targetDate, label, createdAt]);
+        this._saveDatabase();
+        this.addLog(`Countdown set to ${targetDate} (${label})`);
+    }
+
+    getCountdown() {
+        if (!this.db) return null;
+        const stmt = this.db.prepare("SELECT * FROM countdowns ORDER BY id DESC LIMIT 1");
+        let countdown = null;
+        if (stmt.step()) {
+            countdown = stmt.getAsObject();
+        }
+        stmt.free();
+        return countdown;
+    }
+
+    clearCountdown() {
+        if (!this.db) return;
+        this.db.run("DELETE FROM countdowns");
+        this._saveDatabase();
+        this.addLog('Countdown cleared');
     }
 }
